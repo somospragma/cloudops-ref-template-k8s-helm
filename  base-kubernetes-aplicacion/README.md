@@ -91,54 +91,54 @@ art-kubernetes-microservicio/
 │                          NAMESPACE: ns-app-{env}                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────────────┐                                                   │
-│  │   INGRESS           │  ← Exposición externa (HTTP/HTTPS + TLS/mTLS)     │
-│  │  (nginx/alb)        │    Host: app.example.com                          │
-│  └──────────┬──────────┘    Path: /ficohsa → rewrite → /                   │
+│  ┌─────────────────────┐                                                    │
+│  │   INGRESS           │  ← Exposición externa (HTTP/HTTPS + TLS/mTLS)      │
+│  │  (nginx/alb)        │    Host: app.example.com                           │
+│  └──────────┬──────────┘    Path: /ficohsa → rewrite → /                    │
 │             │                                                               │
 │             │ Enruta tráfico                                                │
 │             ↓                                                               │
-│  ┌─────────────────────┐                                                   │
-│  │   SERVICE           │  ← Balanceo de carga interno (ClusterIP)          │
-│  │  (ClusterIP:80)     │    Selector: app=microservicio-app                │
-│  └──────────┬──────────┘                                                   │
+│  ┌─────────────────────┐                                                    │
+│  │   SERVICE           │  ← Balanceo de carga interno (ClusterIP)           │
+│  │  (ClusterIP:80)     │    Selector: app=microservicio-app                 │
+│  └──────────┬──────────┘                                                    │
 │             │                                                               │
 │             │ Distribuye tráfico entre pods                                 │
 │             ↓                                                               │
-│  ┌──────────────────────────────────────────────────────────┐              │
-│  │                    DEPLOYMENT                            │              │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │              │
-│  │  │  POD 1   │  │  POD 2   │  │  POD 3   │  │  POD N   │ │              │
-│  │  │          │  │          │  │          │  │          │ │              │
-│  │  │ Container│  │ Container│  │ Container│  │ Container│ │              │
-│  │  │  Image   │  │  Image   │  │  Image   │  │  Image   │ │              │
-│  │  │          │  │          │  │          │  │          │ │              │
-│  │  │ /config/ │  │ /config/ │  │ /config/ │  │ /config/ │ │              │
-│  │  │   ↑      │  │   ↑      │  │   ↑      │  │   ↑      │ │              │
-│  │  └───┼──────┘  └───┼──────┘  └───┼──────┘  └───┼──────┘ │              │
-│  │      │             │             │             │         │              │
-│  │      └─────────────┴─────────────┴─────────────┘         │              │
-│  │                    Monta ConfigMap                        │              │
-│  └──────────────────────────────────────────────────────────┘              │
+│  ┌──────────────────────────────────────────────────────────┐               │
+│  │                    DEPLOYMENT                            │               │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │               │
+│  │  │  POD 1   │  │  POD 2   │  │  POD 3   │  │  POD N   │  │               │
+│  │  │          │  │          │  │          │  │          │  │               │
+│  │  │ Container│  │ Container│  │ Container│  │ Container│  │               │
+│  │  │  Image   │  │  Image   │  │  Image   │  │  Image   │  │               │
+│  │  │          │  │          │  │          │  │          │  │               │
+│  │  │ /config/ │  │ /config/ │  │ /config/ │  │ /config/ │  │               │
+│  │  │   ↑      │  │   ↑      │  │   ↑      │  │   ↑      │  │               │
+│  │  └───┼──────┘  └───┼──────┘  └───┼──────┘  └───┼──────┘  │               │
+│  │      │             │             │             │         │               │ 
+│  │      └─────────────┴─────────────┴─────────────┘         │               │
+│  │                    Monta ConfigMap                       │               │
+│  └──────────────────────────────────────────────────────────┘               │
 │             ↑                                  ↑                            │
 │             │                                  │                            │
-│  ┌──────────┴──────────┐          ┌───────────┴──────────┐                 │
-│  │   CONFIGMAP         │          │  SERVICEACCOUNT      │                 │
-│  │  application.yaml   │          │   AWS IRSA           │                 │
-│  │  (app config)       │          │   role-arn: xxx      │                 │
-│  └─────────────────────┘          └──────────────────────┘                 │
+│  ┌──────────┴──────────┐           ┌───────────┴──────────┐                 │
+│  │   CONFIGMAP         │           │  SERVICEACCOUNT      │                 │
+│  │  application.yaml   │           │   AWS IRSA           │                 │
+│  │  (app config)       │           │   role-arn: xxx      │                 │
+│  └─────────────────────┘           └──────────────────────┘                 │
 │                                                                             │
-│  ┌─────────────────────────────────────────────────────────┐               │
-│  │   HPA (HorizontalPodAutoscaler)                         │               │
-│  │   Min: 1-3  |  Max: 2-10  |  Target: CPU 70%, MEM 80%  │               │
-│  │   ↓ Escala automáticamente el Deployment               │               │
-│  └─────────────────────────────────────────────────────────┘               │
+│  ┌─────────────────────────────────────────────────────────┐                │
+│  │   HPA (HorizontalPodAutoscaler)                         │                │
+│  │   Min: 1-3  |  Max: 2-10  |  Target: CPU 70%, MEM 80%   │                │
+│  │   ↓ Escala automáticamente el Deployment                │                │
+│  └─────────────────────────────────────────────────────────┘                │
 │                                                                             │
-│  ┌─────────────────────────────────────────────────────────┐               │
-│  │   PDB (PodDisruptionBudget)                             │               │
-│  │   minAvailable: 1-2  (garantiza disponibilidad)         │               │
-│  │   ↓ Protege pods durante mantenimientos del cluster     │               │
-│  └─────────────────────────────────────────────────────────┘               │
+│  ┌─────────────────────────────────────────────────────────┐                │
+│  │   PDB (PodDisruptionBudget)                             │                │
+│  │   minAvailable: 1-2  (garantiza disponibilidad)         │                │
+│  │   ↓ Protege pods durante mantenimientos del cluster     │                │
+│  └─────────────────────────────────────────────────────────┘                │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
