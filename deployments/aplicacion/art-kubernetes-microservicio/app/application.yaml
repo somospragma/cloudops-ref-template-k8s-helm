@@ -1,0 +1,130 @@
+# =====================================================
+# APPLICATION.YAML - DESARROLLADOR MANTIENE
+# =====================================================
+# Este archivo vive en el REPO DEL DESARROLLADOR
+# Contiene los VALORES de configuración de Spring Boot
+#
+# IMPORTANTE: Este archivo NO usa sintaxis {{ .Values.xxx }}
+# Helm lo lee como archivo de valores y hace merge con k8s/values.yaml
+# Los valores aquí SOBRESCRIBEN los de k8s/values.yaml
+# =====================================================
+
+# Esta configuración se convertirá en un ConfigMap
+# y se montará como archivo en /app/config/application.yaml
+# Spring Boot lo leerá automáticamente
+
+application:
+  # =====================================================
+  # CONFIGURACIÓN SPRING BOOT (DESARROLLO)
+  # =====================================================
+  # Los valores aquí son para DESARROLLO
+  # En producción se sobrescriben desde Library Groups con --set
+
+  server:
+    port: 8080
+
+  spring:
+    datasource:
+      # Database de desarrollo
+      url: "jdbc:postgresql://db-dev.internal:5432/myapp_dev"
+      username: "myapp_user"
+      driverClassName: "org.postgresql.Driver"
+      hikari:
+        maximumPoolSize: 10
+        minimumIdle: 2
+        connectionTimeout: 30000
+
+  # =====================================================
+  # LOGGING (DEBUG para desarrollo)
+  # =====================================================
+  logging:
+    level:
+      root: "DEBUG"
+      web: "DEBUG"
+      springframework: "INFO"
+      application: "DEBUG"
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+  # =====================================================
+  # MANAGEMENT (ACTUATOR)
+  # =====================================================
+  management:
+    endpoints:
+      web:
+        basePath: "/"
+        exposure:
+          include: "health,info,metrics"
+    endpoint:
+      health:
+        showDetails: "always"
+        probes:
+          enabled: true
+    health:
+      readiness:
+        enabled: true
+      liveness:
+        enabled: true
+
+  # =====================================================
+  # API ENDPOINTS EXTERNOS (DEV)
+  # =====================================================
+  api:
+    external:
+      # Servicio de autenticación (dev)
+      auth:
+        url: "http://auth-service-dev.internal/api/v1"
+        timeout: 5000
+
+      # Servicio de pagos (dev)
+      payment:
+        url: "http://payment-service-dev.internal/api/v1"
+        timeout: 10000
+
+      # Servicio de notificaciones (dev)
+      notification:
+        url: "http://notification-service-dev.internal/api/v1"
+        timeout: 3000
+
+  # =====================================================
+  # FEATURE FLAGS (DESARROLLO)
+  # =====================================================
+  features:
+    newUI:
+      enabled: true        # Habilitado en dev para testing
+    betaFeatures:
+      enabled: true        # Habilitado en dev
+    maintenance:
+      enabled: false
+
+  # =====================================================
+  # CACHE (REDIS) - DESARROLLO
+  # =====================================================
+  cache:
+    enabled: false         # Deshabilitado en dev para facilitar debugging
+    ttl: 300               # 5 minutos en dev
+    redis:
+      host: "redis-dev.internal"
+      port: 6379
+      database: 0
+
+  # =====================================================
+  # CONFIGURACIÓN ESPECÍFICA DE TU APLICACIÓN
+  # =====================================================
+  custom:
+    businessLogic:
+      maxRetries: 3
+      timeout: 5000
+
+# =====================================================
+# NOTAS PARA EL DESARROLLADOR:
+# =====================================================
+# 1. Edita este archivo para cambiar configuración de la app
+# 2. Los valores aquí son para DESARROLLO
+# 3. Para producción:
+#    - CloudOps usa --set application.spring.datasource.url="..."
+#    - O creas app/application-prod.yaml específico
+# 4. NO pongas passwords aquí → Usa Secrets
+# 5. Commit y push → Pipeline despliega automáticamente
+# 6. Spring Boot lee de /app/config/application.yaml
+# =====================================================

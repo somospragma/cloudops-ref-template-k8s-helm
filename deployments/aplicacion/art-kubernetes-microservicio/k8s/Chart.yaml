@@ -1,0 +1,13 @@
+apiVersion: v2
+name: microservicio-base
+description: Helm Chart base para despliegue de microservicios en AWS EKS
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - kubernetes
+  - microservicio
+  - aws
+  - eks
+maintainers:
+  - name: DevOps-CloudOps Pragma

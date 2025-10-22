@@ -1,0 +1,68 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.appName }}-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.appName }}
+    env: {{ .Values.environment }}
+  annotations:
+    # Nginx Ingress Controller annotations
+    {{- if .Values.ingress.annotations.sslRedirect }}
+    nginx.ingress.kubernetes.io/ssl-redirect: {{ .Values.ingress.annotations.sslRedirect | quote }}
+    {{- end }}
+    {{- if .Values.ingress.annotations.forceSSLRedirect }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: {{ .Values.ingress.annotations.forceSSLRedirect | quote }}
+    {{- end }}
+    {{- if .Values.ingress.annotations.rewriteTarget }}
+    nginx.ingress.kubernetes.io/rewrite-target: {{ .Values.ingress.annotations.rewriteTarget }}
+    {{- end }}
+    # AWS Load Balancer Controller annotations (si usas AWS)
+    {{- if eq .Values.ingress.className "alb" }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.annotations.awsScheme | default "internet-facing" }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.annotations.awsTargetType | default "ip" }}
+    {{- if .Values.ingress.annotations.awsCertificateArn }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.annotations.awsCertificateArn }}
+    {{- end }}
+    {{- end }}
+    # mTLS annotations (opcional - para seguridad avanzada)
+    {{- if .Values.ingress.mtls.enabled }}
+    nginx.ingress.kubernetes.io/auth-tls-secret: "{{ .Values.namespace }}/{{ .Values.ingress.mtls.secretName }}"
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: {{ .Values.ingress.mtls.verifyClient | quote }}
+    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: {{ .Values.ingress.mtls.passCertToUpstream | quote }}
+    {{- end }}
+    # Custom annotations adicionales
+    {{- range $key, $value := .Values.ingress.annotations.custom }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        {{- range .Values.ingress.tls.hosts }}
+        - {{ . }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+
+  rules:
+    {{- range .Values.ingress.rules }}
+    - {{- if .host }}
+      host: {{ .host }}
+      {{- end }}
+      http:
+        paths:
+        {{- range .paths }}
+        - path: {{ .path }}
+          pathType: {{ .pathType }}
+          backend:
+            service:
+              name: {{ $.Values.appName }}-service
+              port:
+                number: {{ .servicePort }}
+        {{- end }}
+    {{- end }}
+{{- end }}

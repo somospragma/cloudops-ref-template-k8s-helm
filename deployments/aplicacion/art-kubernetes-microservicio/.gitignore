@@ -1,0 +1,21 @@
+# Archivos renderizados (NO guardar en Git)
+rendered-manifests/
+rendered-manifests_*/
+
+# Archivos de ambiente locales
+.env
+.env.local
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*

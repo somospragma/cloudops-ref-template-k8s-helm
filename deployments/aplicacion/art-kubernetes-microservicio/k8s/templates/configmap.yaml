@@ -1,0 +1,14 @@
+{{- if .Values.configMap.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.appName }}-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.appName }}
+data:
+  # application.yaml se monta como archivo en el contenedor
+  # Spring Boot lo lee automáticamente desde /app/config/application.yaml
+  application.yaml: |
+{{ .Values.application | toYaml | indent 4 }}
+{{- end }}

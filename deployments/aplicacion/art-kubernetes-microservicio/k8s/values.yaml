@@ -1,0 +1,443 @@
+# =====================================================
+# CONFIGURACIÓN BÁSICA - APRENDIENDO HELM
+# =====================================================
+# NOTA: Este archivo contiene valores BASE que están en GIT
+#       Los valores marcados con "⚠️ OVERRIDE" se sobrescriben desde .env.*
+
+# Nombre de la aplicación (usado para labels y nombres de recursos)
+# ✅ FIJO - NO cambiar por ambiente
+appName: microservicio-app
+
+# Namespace donde se desplegará la aplicación
+# ⚠️ OVERRIDE - Se sobrescribe desde .env.* por ambiente
+# Este es solo un fallback si no hay archivo .env
+namespace: default
+
+# =====================================================
+# CONFIGURACIÓN DE LA IMAGEN
+# =====================================================
+image:
+  # Registry del contenedor (ECR, DockerHub, etc)
+  # ✅ FIJO - Mismo registry en todos los ambientes (o se puede override si necesario)
+  registry: docker.io
+
+  # Repositorio de la imagen
+  # ✅ FIJO - Mismo repositorio (nombre de la app)
+  # IMPORTANTE: Cambiar "nginx" por el nombre real de tu app
+  repository: nginx
+
+  # Tag de la imagen
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con IMAGE_TAG
+  # Este es solo el valor por defecto (para testing/desarrollo local)
+  tag: "1.25-alpine"
+
+  # Pull policy (Always, IfNotPresent, Never)
+  # ✅ FIJO - O se puede override si dev necesita Always
+  pullPolicy: IfNotPresent
+
+# =====================================================
+# CONFIGURACIÓN DEL DEPLOYMENT
+# =====================================================
+# Número de réplicas
+# ⚠️ OVERRIDE - Se sobrescribe desde .env.* con REPLICA_COUNT
+# dev=1, staging=2, prod=5 (ejemplo)
+# Este es solo el valor por defecto
+replicaCount: 2
+
+# =====================================================
+# RECURSOS (REQUESTS Y LIMITS)
+# =====================================================
+# ⚠️ OVERRIDE - Se sobrescriben desde .env.* por ambiente
+# Cada ambiente tiene diferentes necesidades de recursos
+# Estos son valores por defecto (medios)
+resources:
+  requests:
+    memory: "128Mi"   # Se sobrescribe con MEMORY_REQUEST
+    cpu: "100m"       # Se sobrescribe con CPU_REQUEST
+  limits:
+    memory: "256Mi"   # Se sobrescribe con MEMORY_LIMIT
+    cpu: "200m"       # Se sobrescribe con CPU_LIMIT
+
+# =====================================================
+# CONFIGURACIÓN DEL CONTENEDOR
+# =====================================================
+container:
+  # Puerto donde escucha la aplicación
+  # ✅ FIJO - El puerto de la aplicación es parte de su estructura
+  # Si tu app escucha en 8080, cámbialo aquí (y en service.targetPort)
+  port: 80
+
+  # Liveness Probe (verifica si el contenedor está vivo)
+  # ✅ FIJO - La configuración de probes es parte de la estructura
+  # Solo cambiar si tu aplicación tiene endpoints diferentes
+  livenessProbe:
+    path: /                      # Cambiar si tu app usa /health
+    port: 80
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # Readiness Probe (verifica si el contenedor está listo para recibir tráfico)
+  # ✅ FIJO - Configuración estructural
+  readinessProbe:
+    path: /                      # Cambiar si tu app usa /ready
+    port: 80
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# =====================================================
+# SERVICE (ClusterIP)
+# =====================================================
+service:
+  # Tipo de servicio - ClusterIP para uso interno (el Ingress lo expondrá)
+  # ✅ FIJO - Siempre ClusterIP (no LoadBalancer)
+  type: ClusterIP
+
+  # Puerto del servicio
+  # ✅ FIJO - Puerto que expone el Service
+  port: 80
+
+  # Puerto del contenedor (debe coincidir con container.port)
+  # ✅ FIJO - Debe ser igual a container.port
+  targetPort: 80
+
+# =====================================================
+# INGRESS (Exposición Externa)
+# =====================================================
+ingress:
+  # Habilitar/deshabilitar Ingress
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  # Típicamente habilitado en staging y prod, deshabilitado en dev
+  enabled: false
+
+  # Clase del Ingress Controller
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con INGRESS_CLASS_NAME
+  # Opciones: "nginx" (más común), "alb" (AWS Application Load Balancer)
+  className: nginx
+
+  # Annotations para configurar el Ingress
+  # ✅ FIJO - Configuración base de annotations
+  # Se pueden sobrescribir específicas desde .env.* si es necesario
+  annotations:
+    # Nginx Ingress Controller annotations
+    sslRedirect: "false"              # Redirigir HTTP a HTTPS
+    forceSSLRedirect: "false"         # Forzar redirección SSL
+    rewriteTarget: ""                # Reescribir path (vacío = no reescribir)
+
+    # AWS Load Balancer Controller annotations (solo si className=alb)
+    awsScheme: "internet-facing"     # internet-facing o internal
+    awsTargetType: "ip"              # ip o instance
+    awsCertificateArn: ""            # ARN del certificado SSL de ACM
+
+    # Custom annotations adicionales (se pueden agregar desde .env.*)
+    custom: {}
+      # Ejemplo:
+      # nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+      # nginx.ingress.kubernetes.io/rate-limit: "100"
+
+  # Configuración TLS/SSL
+  # ⚠️ OVERRIDE - hosts y secretName se sobrescriben desde .env.*
+  tls:
+    enabled: false                   # Habilitar HTTPS
+    hosts: []                        # Lista de hosts (se sobrescribe con INGRESS_TLS_HOSTS)
+      # - app.example.com
+      # - app.dev.example.com
+    secretName: ""                   # Nombre del Secret con certificado TLS
+
+  # Reglas de ruteo
+  # ⚠️ OVERRIDE - Se sobrescriben desde .env.* (estructura compleja)
+  # Para sobrescribir desde .env.*, usar formato especial en deployment.sh
+  #
+  # NOTA: El campo 'host' es OPCIONAL
+  #   - CON host: Solo acepta tráfico del dominio especificado
+  #   - SIN host: Acepta tráfico de cualquier dominio/IP (catch-all)
+  #
+  # Ejemplos:
+  #
+  # Ejemplo 1: CON host específico (más común en producción)
+  # rules:
+  #   - host: app.example.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  #         servicePort: 80
+  #
+  # Ejemplo 2: SIN host (acepta cualquier IP/dominio)
+  # rules:
+  #   - http:
+  #     paths:
+  #       - path: /pruebas
+  #         pathType: Prefix
+  #         servicePort: 80
+  #
+  # Ejemplo 3: Múltiples paths para un host
+  # rules:
+  #   - host: api.example.com
+  #     paths:
+  #       - path: /v1
+  #         pathType: Prefix
+  #         servicePort: 80
+  #       - path: /v2
+  #         pathType: Prefix
+  #         servicePort: 80
+  #
+  # Ejemplo 4: Múltiples hosts
+  # rules:
+  #   - host: api.example.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  #         servicePort: 80
+  #   - host: admin.example.com
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  #         servicePort: 80
+  #
+  # Configuración por defecto (se sobrescribe desde .env.*)
+  rules:
+    - host: ""                       # Host (SIEMPRE se configura desde INGRESS_HOST en .env.*)
+                                     # Si está vacío = SIN host (acepta cualquier IP/dominio)
+                                     # Si tiene valor = CON host específico
+      paths:
+        - path: /                    # Path (se sobrescribe con INGRESS_PATH)
+          pathType: Prefix           # Prefix, Exact, ImplementationSpecific
+          servicePort: 80            # Puerto del service (normalmente 80)
+
+  # Configuración mTLS (Mutual TLS) - Opcional
+  # ✅ FIJO - Solo habilitar si se requiere autenticación de cliente
+  # ⚠️ OVERRIDE - secretName se sobrescribe desde .env.* si es necesario
+  mtls:
+    enabled: false                   # Habilitar mTLS
+    secretName: ""                   # Nombre del Secret con CA cert para validar clientes
+    verifyClient: "on"               # on, off, optional
+    passCertToUpstream: "false"      # Pasar certificado del cliente al backend
+
+# =====================================================
+# CONFIGMAP (Variables de Aplicación)
+# =====================================================
+configMap:
+  # Habilitar/deshabilitar ConfigMap
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  enabled: false
+
+# =====================================================
+# APPLICATION CONFIG (Para Spring Boot)
+# =====================================================
+# NOTA: Esta configuración se convierte en application.yaml
+# El desarrollador mantiene app/application.yaml con la estructura completa
+# Estos son solo VALORES POR DEFECTO que se sobrescriben desde:
+#   1. app/application.yaml (estructura y defaults del desarrollador)
+#   2. .env.* (overrides por ambiente desde Library Groups)
+# =====================================================
+application:
+  # Server configuration
+  server:
+    port: 8080
+
+  # Spring configuration
+  spring:
+    datasource:
+      url: "jdbc:postgresql://localhost:5432/myapp"
+      username: "myapp_user"
+      driverClassName: "org.postgresql.Driver"
+      hikari:
+        maximumPoolSize: 10
+        minimumIdle: 2
+        connectionTimeout: 30000
+
+  # Logging
+  logging:
+    level:
+      root: "INFO"
+      web: "INFO"
+      springframework: "INFO"
+      application: "DEBUG"
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+  # Management (Actuator)
+  management:
+    endpoints:
+      web:
+        basePath: "/"
+        exposure:
+          include: "health,info,metrics"
+    endpoint:
+      health:
+        showDetails: "always"
+        probes:
+          enabled: true
+    health:
+      readiness:
+        enabled: true
+      liveness:
+        enabled: true
+
+  # External APIs
+  api:
+    external:
+      auth:
+        url: "http://auth-service/api/v1"
+        timeout: 5000
+      payment:
+        url: "http://payment-service/api/v1"
+        timeout: 10000
+      notification:
+        url: "http://notification-service/api/v1"
+        timeout: 3000
+
+  # Feature Flags
+  features:
+    newUI:
+      enabled: false
+    betaFeatures:
+      enabled: false
+    maintenance:
+      enabled: false
+
+  # Cache (Redis)
+  cache:
+    enabled: false
+    ttl: 3600
+    redis:
+      host: "localhost"
+      port: 6379
+      database: 0
+
+  # Custom business logic
+  custom:
+    businessLogic:
+      maxRetries: 3
+      timeout: 5000
+
+# =====================================================
+# HORIZONTAL POD AUTOSCALER (HPA)
+# =====================================================
+# Auto-escalado horizontal basado en métricas de uso
+# ⚠️ OVERRIDE - Se habilita/deshabilita y se configuran límites desde .env.*
+# IMPORTANTE: HPA requiere que el cluster tenga Metrics Server instalado
+hpa:
+  # Habilitar/deshabilitar HPA
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  # Típicamente habilitado en staging y prod, deshabilitado en dev
+  enabled: false
+
+  # Número mínimo de réplicas
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con HPA_MIN_REPLICAS
+  # Dev: 1, Staging: 2, Prod: 3 (ejemplo)
+  minReplicas: 1
+
+  # Número máximo de réplicas
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con HPA_MAX_REPLICAS
+  # Dev: 2, Staging: 5, Prod: 10 (ejemplo)
+  maxReplicas: 4
+
+  # Métrica de CPU - Porcentaje objetivo de utilización
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con HPA_TARGET_CPU
+  # Cuando el uso de CPU supera este porcentaje, HPA crea más réplicas
+  targetCPUUtilizationPercentage: 70
+
+  # Métrica de Memoria - Porcentaje objetivo de utilización (opcional)
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con HPA_TARGET_MEMORY
+  # Dejar vacío o comentar si solo quieres escalar por CPU
+  targetMemoryUtilizationPercentage: 80
+
+  # Comportamiento de escalado (opcional - configuración avanzada)
+  # ✅ FIJO - Define qué tan rápido escala hacia arriba/abajo
+  # No se sobrescribe normalmente, pero se puede hacer si es necesario
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Esperar 5 min antes de escalar hacia abajo
+      policies:
+      - type: Percent
+        value: 50                       # Reducir máximo 50% de pods a la vez
+        periodSeconds: 60
+      - type: Pods
+        value: 2                        # O reducir máximo 2 pods a la vez
+        periodSeconds: 60
+      selectPolicy: Min                 # Usar la política más conservadora
+    scaleUp:
+      stabilizationWindowSeconds: 60   # Esperar 1 min antes de escalar hacia arriba
+      policies:
+      - type: Percent
+        value: 100                      # Aumentar máximo 100% de pods a la vez
+        periodSeconds: 30
+      - type: Pods
+        value: 4                        # O aumentar máximo 4 pods a la vez
+        periodSeconds: 30
+      selectPolicy: Max                 # Usar la política más agresiva
+
+# =====================================================
+# SERVICE ACCOUNT
+# =====================================================
+# Cuenta de servicio para el pod con soporte para IRSA (AWS) y Azure Workload Identity
+# ⚠️ OVERRIDE - Se habilita/deshabilita y se configuran annotations desde .env.*
+serviceAccount:
+  # Habilitar/deshabilitar ServiceAccount
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  # Típicamente habilitado en staging y prod si necesita acceso a AWS/Azure
+  enabled: false
+
+  # Annotations para integración con cloud providers
+  # ⚠️ OVERRIDE - Se sobrescriben desde .env.* según el ambiente
+  annotations:
+    # AWS IRSA (IAM Roles for Service Accounts)
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SERVICEACCOUNT_IRSA_ROLE_ARN
+    # Permite que el pod asuma un IAM role de AWS sin necesidad de credenciales
+    # Ejemplo: arn:aws:iam::123456789012:role/microservicio-app-role
+    irsaRoleArn: ""
+
+    # Azure Workload Identity (para clusters AKS)
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SERVICEACCOUNT_AZURE_CLIENT_ID
+    # Ejemplo: 8e3928e1-03e5-4ba4-9e31-e1e2fe63f720
+    azureClientId: ""
+
+    # Custom annotations adicionales
+    # ✅ FIJO - Se pueden agregar annotations personalizadas si es necesario
+    custom: {}
+      # Ejemplo:
+      # iam.amazonaws.com/permitted: ".*"
+      # custom-annotation: "custom-value"
+
+# =====================================================
+# POD DISRUPTION BUDGET (PDB)
+# =====================================================
+# Garantiza disponibilidad durante mantenimientos del cluster
+# ⚠️ OVERRIDE - Se habilita/deshabilita y se configura desde .env.*
+# IMPORTANTE: Solo tiene sentido con múltiples réplicas (replicaCount > 1)
+pdb:
+  # Habilitar/deshabilitar PDB
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  # Típicamente deshabilitado en dev (1 réplica), habilitado en staging/prod
+  enabled: false
+
+  # Mínimo de pods disponibles durante disrupciones
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con PDB_MIN_AVAILABLE
+  # Puede ser número absoluto (ej: 1, 2) o porcentaje (ej: "50%")
+  # IMPORTANTE: Solo usar minAvailable O maxUnavailable, no ambos
+  # Ejemplos:
+  #   - Para 2 réplicas: minAvailable: 1 (siempre 1 disponible)
+  #   - Para 5 réplicas: minAvailable: 3 (siempre al menos 3 disponibles)
+  #   - Para 10 réplicas: minAvailable: "50%" (siempre al menos 50% disponibles)
+  minAvailable: 1
+
+  # Máximo de pods no disponibles durante disrupciones
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con PDB_MAX_UNAVAILABLE
+  # Puede ser número absoluto (ej: 1, 2) o porcentaje (ej: "25%")
+  # IMPORTANTE: Solo usar minAvailable O maxUnavailable, no ambos
+  # Ejemplos:
+  #   - Para 3 réplicas: maxUnavailable: 1 (máximo 1 puede estar down)
+  #   - Para 10 réplicas: maxUnavailable: "25%" (máximo 25% pueden estar down)
+  # NOTA: Dejar vacío si usas minAvailable
+  maxUnavailable: ""
+
+# Ejemplos de configuración anterior (ya no se usa con toYaml):
+    # DATABASE_HOST: "db.example.com"
+    # DATABASE_NAME: "myapp"
+    # LOG_LEVEL: "info"
+    # API_ENDPOINT: "https://api.example.com"
+    # FEATURE_FLAG_X: "enabled"

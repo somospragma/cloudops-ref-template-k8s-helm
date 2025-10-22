@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.appName }}-deployment
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.appName }}
+    version: {{ .Values.image.tag | quote }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.appName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.appName }}
+        version: {{ .Values.image.tag | quote }}
+
+    spec:
+      {{- if .Values.serviceAccount.enabled }}
+      serviceAccountName: {{ .Values.appName }}-sa
+      {{- end }}
+      containers:
+      - name: {{ .Values.appName }}
+        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+        ports:
+        - name: http
+          containerPort: {{ .Values.container.port }}
+          protocol: TCP
+
+        # Montaje de ConfigMap como archivo
+        # application.yaml se monta en /app/config/application.yaml
+        # Spring Boot lo lee automáticamente
+        {{- if .Values.configMap.enabled }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config/application.yaml
+          subPath: application.yaml
+          readOnly: true
+        {{- end }}
+
+        # Recursos (Requests y Limits)
+        resources:
+          requests:
+            memory: {{ .Values.resources.requests.memory }}
+            cpu: {{ .Values.resources.requests.cpu }}
+          limits:
+            memory: {{ .Values.resources.limits.memory }}
+            cpu: {{ .Values.resources.limits.cpu }}
+
+        # Liveness Probe
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.container.livenessProbe.path }}
+            port: {{ .Values.container.livenessProbe.port }}
+          initialDelaySeconds: {{ .Values.container.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.container.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.container.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.container.livenessProbe.failureThreshold }}
+
+        # Readiness Probe
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.container.readinessProbe.path }}
+            port: {{ .Values.container.readinessProbe.port }}
+          initialDelaySeconds: {{ .Values.container.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.container.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.container.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.container.readinessProbe.failureThreshold }}
+
+      # Volúmenes
+      # ConfigMap se monta como archivo para que la app lo lea
+      {{- if .Values.configMap.enabled }}
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ .Values.appName }}-config
+          items:
+          - key: application.yaml
+            path: application.yaml
+      {{- end }}
