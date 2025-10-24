@@ -1,0 +1,81 @@
+kind: Deployment
+metadata:
+  name: microservicio-app-deployment
+  namespace: ns-app-dev
+  labels:
+    app: microservicio-app
+    version: "1.25-alpine"
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: microservicio-app
+
+  template:
+    metadata:
+      labels:
+        app: microservicio-app
+        version: "1.25-alpine"
+
+    spec:
+      serviceAccountName: microservicio-app-sa
+      containers:
+      - name: microservicio-app
+        image: "docker.io/nginx:1.25-alpine"
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+
+        # Montaje de ConfigMap como archivo
+        # application.yaml se monta en /app/config/application.yaml
+        # Spring Boot lo lee automáticamente
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config/application.yaml
+          subPath: application.yaml
+          readOnly: true
+
+        # Recursos (Requests y Limits)
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 500m
+          limits:
+            memory: 512Mi
+            cpu: 1
+
+        # Liveness Probe
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Readiness Probe
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      # Volúmenes
+      # ConfigMap se monta como archivo para que la app lo lea
+      volumes:
+      - name: config-volume
+        configMap:
+          name: microservicio-app-config
+          items:
+          - key: application.yaml
+            path: application.yaml
+# Source: microservicio-base/templates/hpa.yaml
+apiVersion: autoscaling/v2

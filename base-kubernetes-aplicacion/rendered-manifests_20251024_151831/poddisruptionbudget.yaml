@@ -1,0 +1,14 @@
+kind: PodDisruptionBudget
+metadata:
+  name: microservicio-app-pdb
+  namespace: ns-app-dev
+  labels:
+    app: microservicio-app
+    env: 
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: microservicio-app
+# Source: microservicio-base/templates/serviceaccount.yaml
+apiVersion: v1
