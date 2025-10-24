@@ -1,0 +1,187 @@
+#!/bin/bash
+
+set -e
+
+# Cargar configuración si existe
+if [ -f "config.env" ]; then
+    source config.env
+fi
+
+NAMESPACE=${NGINX_NAMESPACE:-ingress-nginx}
+
+echo "🗑️ DESINSTALANDO CONTROLADORES DE INGRESS"
+echo "=========================================="
+
+# Función para confirmar acción
+confirm() {
+    read -p "$1 (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+echo "⚠️ Esta acción eliminará:"
+echo "   - AWS Load Balancer Controller"
+echo "   - NGINX Ingress Controller"
+echo "   - Service Accounts asociados"
+echo "   - Recursos de prueba (si existen)"
+echo ""
+
+if ! confirm "¿Estás seguro de que quieres continuar?"; then
+    echo "❌ Operación cancelada"
+    exit 0
+fi
+
+echo ""
+echo "🧹 Iniciando proceso de desinstalación..."
+
+# 1. Eliminar aplicación de prueba
+echo ""
+echo "1️⃣ Eliminando aplicación de prueba..."
+if kubectl get deployment test-app -n default >/dev/null 2>&1; then
+    kubectl delete -f test-app.yaml 2>/dev/null || echo "   ⚠️ Error eliminando test-app.yaml"
+    echo "   ✅ Aplicación de prueba eliminada"
+else
+    echo "   ℹ️ Aplicación de prueba no encontrada"
+fi
+
+# 2. Desinstalar NGINX Ingress Controller
+echo ""
+echo "2️⃣ Desinstalando NGINX Ingress Controller..."
+if helm list -n $NAMESPACE | grep -q ingress-nginx; then
+    helm uninstall ingress-nginx -n $NAMESPACE
+    echo "   ✅ NGINX Ingress Controller desinstalado"
+else
+    echo "   ℹ️ NGINX Ingress Controller no encontrado via Helm"
+fi
+
+# Eliminar namespace de NGINX solo si fue creado por nuestro script
+echo "   🗂️ Verificando namespace $NAMESPACE..."
+if kubectl get namespace $NAMESPACE -o jsonpath='{.metadata.labels.created-by}' 2>/dev/null | grep -q "nginx-install-script"; then
+    kubectl delete namespace $NAMESPACE
+    echo "   ✅ Namespace $NAMESPACE eliminado (creado por nuestro script)"
+else
+    echo "   ℹ️ Namespace $NAMESPACE no fue creado por nuestro script, conservado"
+fi
+
+# 3. Desinstalar AWS Load Balancer Controller
+echo ""
+echo "3️⃣ Desinstalando AWS Load Balancer Controller..."
+if helm list -n kube-system | grep -q aws-load-balancer-controller; then
+    helm uninstall aws-load-balancer-controller -n kube-system
+    echo "   ✅ AWS Load Balancer Controller desinstalado"
+else
+    echo "   ℹ️ AWS Load Balancer Controller no encontrado via Helm"
+fi
+
+# 4. Eliminar Service Account y IAM role
+echo ""
+echo "4️⃣ Eliminando Service Account y IAM role..."
+if kubectl get sa aws-load-balancer-controller -n kube-system >/dev/null 2>&1; then
+    kubectl delete sa aws-load-balancer-controller -n kube-system
+    echo "   ✅ Service Account eliminado"
+else
+    echo "   ℹ️ Service Account no encontrado"
+fi
+
+# Eliminar IAM role específico del cluster
+if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
+    ROLE_NAME="AmazonEKSLoadBalancerControllerRole-${CLUSTER_NAME}"
+    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy-${CLUSTER_NAME}"
+    
+    aws iam detach-role-policy \
+        --role-name $ROLE_NAME \
+        --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
+        --profile $AWS_PROFILE 2>/dev/null || echo "   ℹ️ Política ya desvinculada"
+    
+    aws iam delete-role \
+        --role-name $ROLE_NAME \
+        --profile $AWS_PROFILE 2>/dev/null || echo "   ℹ️ Role no encontrado"
+    
+    echo "   ✅ IAM role específico eliminado: $ROLE_NAME"
+else
+    echo "   ⚠️ AWS_ACCOUNT_ID o CLUSTER_NAME no definidos, no se puede eliminar IAM role"
+fi
+
+# 5. Limpiar CRDs (opcional)
+echo ""
+echo "5️⃣ Limpiando Custom Resource Definitions..."
+if confirm "¿Eliminar CRDs de AWS Load Balancer Controller? (Esto puede afectar otros clusters)"; then
+    kubectl delete crd ingressclassparams.elbv2.k8s.aws 2>/dev/null || echo "   ℹ️ CRD ingressclassparams no encontrado"
+    kubectl delete crd targetgroupbindings.elbv2.k8s.aws 2>/dev/null || echo "   ℹ️ CRD targetgroupbindings no encontrado"
+    echo "   ✅ CRDs eliminados"
+else
+    echo "   ℹ️ CRDs conservados"
+fi
+
+# 6. Limpiar políticas IAM específicas del cluster
+echo ""
+echo "6️⃣ Limpiando políticas IAM específicas del cluster..."
+if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
+    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy-${CLUSTER_NAME}"
+    if confirm "¿Eliminar política IAM específica $POLICY_NAME?"; then
+        aws iam delete-policy \
+            --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
+            --profile $AWS_PROFILE \
+            2>/dev/null || echo "   ⚠️ Error eliminando política IAM o no existe"
+        echo "   ✅ Política IAM específica eliminada: $POLICY_NAME"
+    else
+        echo "   ℹ️ Política IAM específica conservada: $POLICY_NAME"
+    fi
+else
+    echo "   ⚠️ AWS_ACCOUNT_ID o CLUSTER_NAME no definidos, no se puede eliminar política IAM"
+fi
+
+# 7. Limpiar archivos temporales
+echo ""
+echo "7️⃣ Limpiando archivos temporales..."
+rm -f iam_policy.json
+rm -f nginx-values.yaml
+rm -f crds.yaml
+echo "   ✅ Archivos temporales eliminados"
+
+# 8. Verificación final
+echo ""
+echo "8️⃣ Verificación final..."
+echo "   📋 Deployments restantes en kube-system:"
+kubectl get deployment -n kube-system | grep -E "(aws-load-balancer|ingress)" || echo "   ✅ No se encontraron deployments de controladores"
+
+echo ""
+echo "   📋 Deployments restantes en $NAMESPACE:"
+kubectl get deployment -n $NAMESPACE 2>/dev/null | grep ingress || echo "   ✅ No se encontraron deployments de NGINX"
+
+echo ""
+echo "   📋 IngressClasses restantes:"
+kubectl get ingressclass 2>/dev/null || echo "   ℹ️ No se encontraron IngressClasses"
+
+echo ""
+echo "=========================================="
+echo "✅ DESINSTALACIÓN COMPLETADA"
+echo "=========================================="
+
+echo ""
+echo "📋 RESUMEN:"
+echo "✅ AWS Load Balancer Controller: Eliminado"
+echo "✅ NGINX Ingress Controller: Eliminado"
+echo "✅ Aplicación de prueba: Eliminada"
+echo "✅ Archivos temporales: Eliminados"
+
+echo ""
+echo "⚠️ NOTAS:"
+echo "- Los LoadBalancers de AWS pueden tardar unos minutos en eliminarse completamente"
+echo "- Verifica en la consola de AWS que no queden recursos huérfanos"
+echo "- Si conservaste las políticas IAM, puedes reutilizarlas en futuras instalaciones"
+
+echo ""
+echo "🔍 COMANDOS DE VERIFICACIÓN:"
+echo "# Verificar que no queden pods:"
+echo "kubectl get pods --all-namespaces | grep -E '(aws-load-balancer|ingress-nginx)'"
+echo ""
+echo "# Verificar LoadBalancers en AWS:"
+echo "aws elbv2 describe-load-balancers --region $AWS_REGION"
+echo ""
+echo "# Verificar políticas IAM:"
+echo "aws iam list-policies --scope Local | grep LoadBalancer"
