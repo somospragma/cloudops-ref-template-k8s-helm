@@ -34,11 +34,11 @@ fi
 echo "🔍 DEBUG - Variables cargadas:"
 echo "   CLUSTER_NAME: $CLUSTER_NAME"
 echo "   AWS_REGION: $AWS_REGION"
-echo "   AWS_PROFILE: $AWS_PROFILE"
+
 
 # 0. Configurar contexto del cluster automáticamente
 echo "🔧 Configurando contexto del cluster $CLUSTER_NAME..."
-aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME --profile $AWS_PROFILE 2>&1 | mask_account_id
+aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME 2>&1 | mask_account_id
 if [ $? -ne 0 ]; then
     echo "❌ Error configurando contexto del cluster. Verificar que el cluster existe y tienes acceso."
     exit 1
@@ -65,20 +65,20 @@ echo "🔐 Creando política IAM específica: $POLICY_NAME..."
 aws iam create-policy \
     --policy-name $POLICY_NAME \
     --policy-document file://iam_policy.json \
-    --profile $AWS_PROFILE 2>&1 | mask_account_id || echo "ℹ️ Política IAM ya existe"
+    2>&1 | mask_account_id || echo "ℹ️ Política IAM ya existe"
 
 # 3. Obtener OIDC provider del cluster específico
 echo "🔍 Obteniendo OIDC provider del cluster $CLUSTER_NAME..."
-OIDC_URL=$(aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION --query "cluster.identity.oidc.issuer" --output text --profile $AWS_PROFILE 2>/dev/null)
+OIDC_URL=$(aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION --query "cluster.identity.oidc.issuer" --output text 2>/dev/null)
 OIDC_ID=$(echo $OIDC_URL | cut -d '/' -f 5)
 
-if ! aws iam list-open-id-connect-providers --profile $AWS_PROFILE | grep -q $OIDC_ID; then
+if ! aws iam list-open-id-connect-providers | grep -q $OIDC_ID; then
     echo "🔗 Creando OIDC provider para este cluster..."
     aws iam create-open-id-connect-provider \
         --url $OIDC_URL \
         --thumbprint-list 9e99a48a9960b14926bb7f3b02e22da2b0ab7280 \
         --client-id-list sts.amazonaws.com \
-        --profile $AWS_PROFILE
+
 else
     echo "ℹ️ OIDC provider ya existe para este cluster"
 fi
@@ -113,13 +113,13 @@ EOF
 aws iam create-role \
     --role-name $ROLE_NAME \
     --assume-role-policy-document file://trust-policy.json \
-    --profile $AWS_PROFILE 2>&1 | mask_account_id || echo "ℹ️ Role ya existe"
+    2>&1 | mask_account_id || echo "ℹ️ Role ya existe"
 
 # Adjuntar política específica al role
 aws iam attach-role-policy \
     --role-name $ROLE_NAME \
     --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
-    --profile $AWS_PROFILE
+
 
 # 5. Crear service account con el role específico
 echo "📝 Creando service account con role específico..."

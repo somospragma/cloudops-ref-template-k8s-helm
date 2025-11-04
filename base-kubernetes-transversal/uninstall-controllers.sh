@@ -110,11 +110,11 @@ if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
     aws iam detach-role-policy \
         --role-name $ROLE_NAME \
         --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
-        --profile $AWS_PROFILE 2>/dev/null || echo "   ℹ️ Política ya desvinculada"
+        2>/dev/null || echo "   ℹ️ Política ya desvinculada"
     
     aws iam delete-role \
         --role-name $ROLE_NAME \
-        --profile $AWS_PROFILE 2>/dev/null || echo "   ℹ️ Role no encontrado"
+        2>/dev/null || echo "   ℹ️ Role no encontrado"
     
     echo "   ✅ IAM role específico eliminado: $ROLE_NAME"
 else
@@ -140,7 +140,7 @@ if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
     if confirm "¿Eliminar política IAM específica $POLICY_NAME?"; then
         aws iam delete-policy \
             --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
-            --profile $AWS_PROFILE \
+            \
             2>/dev/null || echo "   ⚠️ Error eliminando política IAM o no existe"
         echo "   ✅ Política IAM específica eliminada: $POLICY_NAME"
     else
@@ -159,16 +159,16 @@ if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
     aws iam detach-role-policy \
         --role-name $CA_ROLE_NAME \
         --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$CA_POLICY_NAME \
-        --profile $AWS_PROFILE 2>/dev/null || echo "   ℹ️ Política de Cluster Autoscaler ya desvinculada"
+        2>/dev/null || echo "   ℹ️ Política de Cluster Autoscaler ya desvinculada"
     
     aws iam delete-role \
         --role-name $CA_ROLE_NAME \
-        --profile $AWS_PROFILE 2>/dev/null || echo "   ℹ️ Role de Cluster Autoscaler no encontrado"
+        2>/dev/null || echo "   ℹ️ Role de Cluster Autoscaler no encontrado"
     
     if confirm "¿Eliminar política IAM de Cluster Autoscaler $CA_POLICY_NAME?"; then
         aws iam delete-policy \
             --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$CA_POLICY_NAME \
-            --profile $AWS_PROFILE \
+            \
             2>/dev/null || echo "   ⚠️ Error eliminando política de Cluster Autoscaler o no existe"
         echo "   ✅ Política IAM de Cluster Autoscaler eliminada: $CA_POLICY_NAME"
     else

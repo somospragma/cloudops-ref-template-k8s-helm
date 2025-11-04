@@ -27,7 +27,7 @@ fi
 
 # 1. Verificar que existan node groups
 echo "🔍 Verificando node groups del cluster..."
-NODE_GROUPS=$(aws eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --profile $AWS_PROFILE --query 'nodegroups' --output text)
+NODE_GROUPS=$(aws eks list-nodegroups --cluster-name $CLUSTER_NAME --region $AWS_REGION --query 'nodegroups' --output text)
 
 if [ -z "$NODE_GROUPS" ] || [ "$NODE_GROUPS" = "None" ]; then
     echo "❌ No se encontraron node groups en el cluster $CLUSTER_NAME"
@@ -47,7 +47,7 @@ for nodegroup in $NODE_GROUPS; do
         --cluster-name $CLUSTER_NAME \
         --nodegroup-name $nodegroup \
         --region $AWS_REGION \
-        --profile $AWS_PROFILE \
+        \
         --query 'nodegroup.resources.autoScalingGroups[0].name' \
         --output text)
     
@@ -58,12 +58,12 @@ for nodegroup in $NODE_GROUPS; do
         aws autoscaling create-or-update-tags \
             --tags "ResourceId=$ASG_NAME,ResourceType=auto-scaling-group,Key=k8s.io/cluster-autoscaler/$CLUSTER_NAME,Value=owned,PropagateAtLaunch=false" \
             --region $AWS_REGION \
-            --profile $AWS_PROFILE
+           
         
         aws autoscaling create-or-update-tags \
             --tags "ResourceId=$ASG_NAME,ResourceType=auto-scaling-group,Key=k8s.io/cluster-autoscaler/enabled,Value=true,PropagateAtLaunch=false" \
             --region $AWS_REGION \
-            --profile $AWS_PROFILE
+           
         
         echo "   ✅ Tags configurados para ASG: $ASG_NAME"
     else
@@ -99,11 +99,11 @@ EOF
 aws iam create-policy \
     --policy-name $POLICY_NAME \
     --policy-document file://cluster-autoscaler-policy.json \
-    --profile $AWS_PROFILE 2>/dev/null || echo "ℹ️ Política IAM ya existe"
+    2>/dev/null || echo "ℹ️ Política IAM ya existe"
 
 # 4. Obtener OIDC provider del cluster
 echo "🔍 Obteniendo OIDC provider del cluster..."
-OIDC_URL=$(aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION --query "cluster.identity.oidc.issuer" --output text --profile $AWS_PROFILE)
+OIDC_URL=$(aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION --query "cluster.identity.oidc.issuer" --output text)
 OIDC_ID=$(echo $OIDC_URL | cut -d '/' -f 5)
 
 # 5. Crear IAM role para Cluster Autoscaler
@@ -135,13 +135,13 @@ EOF
 aws iam create-role \
     --role-name $ROLE_NAME \
     --assume-role-policy-document file://cluster-autoscaler-trust-policy.json \
-    --profile $AWS_PROFILE 2>/dev/null || echo "ℹ️ Role ya existe"
+    2>/dev/null || echo "ℹ️ Role ya existe"
 
 # Adjuntar política al role
 aws iam attach-role-policy \
     --role-name $ROLE_NAME \
     --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
-    --profile $AWS_PROFILE
+   
 
 # 6. Crear service account
 echo "📝 Creando service account..."

@@ -18,7 +18,7 @@ echo "🚀 Desplegando NodeClass y NodePool..."
 
 # Configurar contexto del cluster automáticamente
 echo "🔧 Configurando contexto del cluster $CLUSTER_NAME..."
-aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME --profile $AWS_PROFILE 2>&1 | mask_account_id
+aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME 2>&1 | mask_account_id
 if [ $? -ne 0 ]; then
     echo "❌ Error configurando contexto del cluster"
     exit 1
@@ -40,7 +40,7 @@ spec:
         kubernetes.io/role/internal-elb: "1"
   securityGroupSelectorTerms:
     - tags:
-        kubernetes.io/sg/nodes: "enabled"
+        kubernetes.io/sg/nodes: "1"
   ephemeralStorage:
     size: "EPHEMERAL_STORAGE_SIZE_PLACEHOLDER"
   tags:
@@ -61,18 +61,18 @@ spec:
         kind: NodeClass
         name: NODECLASS_NAME_PLACEHOLDER
       requirements:
-        - key: "eks.amazonaws.com/instance-category"
+        - key: "eks.amazonaws.com/instance-family"
           operator: In
-          values: INSTANCE_CATEGORIES_PLACEHOLDER
-        - key: "eks.amazonaws.com/instance-cpu"
-          operator: In
-          values: INSTANCE_CPUS_PLACEHOLDER
+          values: INSTANCE_FAMILIES_PLACEHOLDER
         - key: "topology.kubernetes.io/zone"
           operator: In
           values: AVAILABILITY_ZONES_PLACEHOLDER
         - key: "kubernetes.io/arch"
           operator: In
           values: ["NODE_ARCHITECTURE_PLACEHOLDER"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["CAPACITY_TYPE_PLACEHOLDER"]
   limits:
     cpu: "CPU_LIMIT_PLACEHOLDER"
     memory: MEMORY_LIMIT_PLACEHOLDER
@@ -89,23 +89,16 @@ sed -i.bak "s/NODE_ARCHITECTURE_PLACEHOLDER/$NODE_ARCHITECTURE/g" nodeclass-node
 sed -i.bak "s/CPU_LIMIT_PLACEHOLDER/$CPU_LIMIT/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/MEMORY_LIMIT_PLACEHOLDER/$MEMORY_LIMIT/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/INSTANCE_NAME_PLACEHOLDER/$INSTANCE_NAME/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/CAPACITY_TYPE_PLACEHOLDER/$CAPACITY_TYPE/g" nodeclass-nodepool-generated.yaml
 
 # Convertir listas separadas por comas a formato JSON array
-CATEGORIES_JSON="["
-IFS=',' read -ra CATEGORIES <<< "$INSTANCE_CATEGORIES"
-for i in "${!CATEGORIES[@]}"; do
-    if [ $i -gt 0 ]; then CATEGORIES_JSON="$CATEGORIES_JSON, "; fi
-    CATEGORIES_JSON="$CATEGORIES_JSON\"${CATEGORIES[i]}\""
+FAMILIES_JSON="["
+IFS=',' read -ra FAMILIES <<< "$INSTANCE_FAMILIES"
+for i in "${!FAMILIES[@]}"; do
+    if [ $i -gt 0 ]; then FAMILIES_JSON="$FAMILIES_JSON, "; fi
+    FAMILIES_JSON="$FAMILIES_JSON\"${FAMILIES[i]}\""
 done
-CATEGORIES_JSON="$CATEGORIES_JSON]"
-
-CPUS_JSON="["
-IFS=',' read -ra CPUS <<< "$INSTANCE_CPUS"
-for i in "${!CPUS[@]}"; do
-    if [ $i -gt 0 ]; then CPUS_JSON="$CPUS_JSON, "; fi
-    CPUS_JSON="$CPUS_JSON\"${CPUS[i]}\""
-done
-CPUS_JSON="$CPUS_JSON]"
+FAMILIES_JSON="$FAMILIES_JSON]"
 
 ZONES_JSON="["
 IFS=',' read -ra ZONES <<< "$AVAILABILITY_ZONES"
@@ -115,8 +108,7 @@ for i in "${!ZONES[@]}"; do
 done
 ZONES_JSON="$ZONES_JSON]"
 
-sed -i.bak "s|INSTANCE_CATEGORIES_PLACEHOLDER|$CATEGORIES_JSON|g" nodeclass-nodepool-generated.yaml
-sed -i.bak "s|INSTANCE_CPUS_PLACEHOLDER|$CPUS_JSON|g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s|INSTANCE_FAMILIES_PLACEHOLDER|$FAMILIES_JSON|g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s|AVAILABILITY_ZONES_PLACEHOLDER|$ZONES_JSON|g" nodeclass-nodepool-generated.yaml
 
 # Limpiar archivos backup

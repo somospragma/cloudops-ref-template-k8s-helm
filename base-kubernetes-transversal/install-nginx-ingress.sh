@@ -24,15 +24,15 @@ fi
 echo "🚀 Instalando NGINX Ingress Controller..."
 
 # Validar variables requeridas
-if [ -z "$CLUSTER_NAME" ] || [ -z "$AWS_REGION" ] || [ -z "$AWS_PROFILE" ]; then
+if [ -z "$CLUSTER_NAME" ] || [ -z "$AWS_REGION" ]; then
     echo "❌ Variables de configuración faltantes en config.env"
-    echo "Requeridas: CLUSTER_NAME, AWS_REGION, AWS_PROFILE"
+    echo "Requeridas: CLUSTER_NAME, AWS_REGION"
     exit 1
 fi
 
 # 0. Configurar contexto del cluster automáticamente
 echo "🔧 Configurando contexto del cluster $CLUSTER_NAME..."
-aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME --profile $AWS_PROFILE 2>&1 | mask_account_id
+aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME 2>&1 | mask_account_id
 if [ $? -ne 0 ]; then
     echo "❌ Error configurando contexto del cluster. Verificar que el cluster existe y tienes acceso."
     exit 1
@@ -63,7 +63,7 @@ CLUSTER_SG=$(aws ec2 describe-security-groups \
     --filters "Name=tag:aws:eks:cluster-name,Values=$CLUSTER_NAME" \
     --query 'SecurityGroups[?contains(GroupName, `ClusterSharedNodeSecurityGroup`) || contains(GroupName, `eks-cluster-sg`) || contains(Description, `EKS created security group`)].GroupId' \
     --output text \
-    --profile $AWS_PROFILE 2>/dev/null | head -1)
+    2>/dev/null | head -1)
 
 # Si no encuentra, buscar por descripción
 if [ -z "$CLUSTER_SG" ] || [ "$CLUSTER_SG" = "None" ]; then
@@ -71,7 +71,7 @@ if [ -z "$CLUSTER_SG" ] || [ "$CLUSTER_SG" = "None" ]; then
         --filters "Name=vpc-id,Values=$VPC_ID" "Name=description,Values=*EKS*$CLUSTER_NAME*" \
         --query 'SecurityGroups[0].GroupId' \
         --output text \
-        --profile $AWS_PROFILE 2>/dev/null)
+        2>/dev/null)
 fi
 
 # Si aún no encuentra, buscar por tag del cluster
@@ -80,7 +80,7 @@ if [ -z "$CLUSTER_SG" ] || [ "$CLUSTER_SG" = "None" ]; then
         --filters "Name=tag:kubernetes.io/cluster/$CLUSTER_NAME,Values=owned" \
         --query 'SecurityGroups[0].GroupId' \
         --output text \
-        --profile $AWS_PROFILE 2>/dev/null)
+        2>/dev/null)
 fi
 
 # Combinar security groups

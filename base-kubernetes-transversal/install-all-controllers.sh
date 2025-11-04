@@ -73,7 +73,7 @@ if ! kubectl get nodes >/dev/null 2>&1; then
     
     # Reconfigurar kubectl automáticamente
     echo "🔧 Configurando kubectl para cluster $CLUSTER_NAME..."
-    if aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME --profile $AWS_PROFILE 2>&1 | mask_account_id; then
+    if aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME 2>&1 | mask_account_id; then
         echo "✅ kubectl reconfigurado exitosamente"
         
         # Verificar nuevamente
