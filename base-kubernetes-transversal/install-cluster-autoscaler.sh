@@ -73,7 +73,7 @@ done
 
 # 3. Crear política IAM para Cluster Autoscaler
 echo "🔐 Creando política IAM para Cluster Autoscaler..."
-POLICY_NAME="AmazonEKSClusterAutoscalerPolicy-${CLUSTER_NAME}"
+POLICY_NAME="AmazonEKSClusterAutoscalerPolicy"
 
 cat > cluster-autoscaler-policy.json << EOF
 {
@@ -108,7 +108,7 @@ OIDC_ID=$(echo $OIDC_URL | cut -d '/' -f 5)
 
 # 5. Crear IAM role para Cluster Autoscaler
 echo "👤 Creando IAM role para Cluster Autoscaler..."
-ROLE_NAME="AmazonEKSClusterAutoscalerRole-${CLUSTER_NAME}"
+ROLE_NAME="AmazonEKSClusterAutoscalerRole"
 OIDC_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
 
 cat > cluster-autoscaler-trust-policy.json << EOF

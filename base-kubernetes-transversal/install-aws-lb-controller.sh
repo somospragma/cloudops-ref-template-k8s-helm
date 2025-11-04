@@ -60,7 +60,7 @@ echo "📥 Descargando política IAM..."
 curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.0/docs/install/iam_policy.json
 
 # 2. Crear política IAM específica para este cluster
-POLICY_NAME="EKSLoadBalancerPolicy"
+POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
 echo "🔐 Creando política IAM específica: $POLICY_NAME..."
 aws iam create-policy \
     --policy-name $POLICY_NAME \
@@ -84,7 +84,7 @@ else
 fi
 
 # 4. Crear IAM role específico para este cluster
-ROLE_NAME="EKSLoadBalancerRole"
+ROLE_NAME="AmazonEKSLoadBalancerControllerRole"
 echo "👤 Creando IAM role específico: $ROLE_NAME..."
 OIDC_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
 
