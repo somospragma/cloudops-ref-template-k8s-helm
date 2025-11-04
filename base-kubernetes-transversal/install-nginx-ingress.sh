@@ -2,6 +2,11 @@
 
 set -e
 
+# Función para ofuscar Account ID
+mask_account_id() {
+    sed "s/$AWS_ACCOUNT_ID/***masked***/g"
+}
+
 # Cargar variables
 if [ ! -f "config.env" ]; then
     echo "❌ Archivo config.env no encontrado"
@@ -9,7 +14,30 @@ if [ ! -f "config.env" ]; then
 fi
 source config.env
 
+# Verificar si se debe instalar NGINX Controller
+if [ "$INSTALL_NGINX_CONTROLLER" != "true" ]; then
+    echo "⏭️ NGINX Ingress Controller deshabilitado (INSTALL_NGINX_CONTROLLER=$INSTALL_NGINX_CONTROLLER)"
+    echo "✅ Saltando instalación de NGINX Ingress Controller"
+    exit 0
+fi
+
 echo "🚀 Instalando NGINX Ingress Controller..."
+
+# Validar variables requeridas
+if [ -z "$CLUSTER_NAME" ] || [ -z "$AWS_REGION" ] || [ -z "$AWS_PROFILE" ]; then
+    echo "❌ Variables de configuración faltantes en config.env"
+    echo "Requeridas: CLUSTER_NAME, AWS_REGION, AWS_PROFILE"
+    exit 1
+fi
+
+# 0. Configurar contexto del cluster automáticamente
+echo "🔧 Configurando contexto del cluster $CLUSTER_NAME..."
+aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME --profile $AWS_PROFILE 2>&1 | mask_account_id
+if [ $? -ne 0 ]; then
+    echo "❌ Error configurando contexto del cluster. Verificar que el cluster existe y tienes acceso."
+    exit 1
+fi
+echo "✅ Contexto configurado correctamente"
 
 # Usar namespace por defecto o el configurado
 NAMESPACE=${NGINX_NAMESPACE:-ingress-nginx}
@@ -154,9 +182,9 @@ admissionWebhooks:
     enabled: true
 EOF
 
-# 4. Instalar NGINX Ingress Controller
-echo "⚙️ Instalando NGINX Ingress Controller..."
-helm install ingress-nginx ingress-nginx/ingress-nginx \
+# 4. Instalar/Actualizar NGINX Ingress Controller
+echo "⚙️ Instalando/Actualizando NGINX Ingress Controller..."
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
     --namespace $NAMESPACE \
     --values nginx-values.yaml \
     --version ${NGINX_CONTROLLER_VERSION:-4.8.3}

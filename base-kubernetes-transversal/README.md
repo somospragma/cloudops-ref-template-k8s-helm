@@ -1,394 +1,385 @@
 # Manual de Instalación Automatizado
-## AWS Load Balancer Controller y NGINX Ingress Controller
+## AWS Load Balancer Controller, NGINX Ingress Controller y EKS Auto Mode
 
 ### Tabla de Contenidos
 1. [Prerrequisitos](#prerrequisitos)
-2. [Variables de Configuración](#variables-de-configuración)
-3. [AWS Load Balancer Controller](#aws-load-balancer-controller)
-4. [NGINX Ingress Controller](#nginx-ingress-controller)
-5. [Scripts de Automatización](#scripts-de-automatización)
-6. [Verificación](#verificación)
-7. [Troubleshooting](#troubleshooting)
+2. [Estructura del Proyecto](#estructura-del-proyecto)
+3. [Configuración](#configuración)
+4. [Scripts Disponibles](#scripts-disponibles)
+5. [Instalación](#instalación)
+6. [EKS Auto Mode](#eks-auto-mode)
+7. [Verificación](#verificación)
+8. [Troubleshooting](#troubleshooting)
+9. [Seguridad](#seguridad)
 
 ---
 
 ## Prerrequisitos
 
 ### Herramientas Requeridas
-- `kubectl` configurado para tu cluster EKS
-- `helm` v3.x instalado
-- `eksctl` instalado
-- `aws cli` configurado con permisos adecuados
-- Cluster EKS funcionando
+
+| Herramienta | Versión Mínima | Propósito |
+|-------------|----------------|-----------|
+| `kubectl` | 1.24+ | Interacción con cluster Kubernetes |
+| `helm` | 3.8+ | Gestión de paquetes Kubernetes |
+| `eksctl` | 0.147+ | Gestión de clusters EKS |
+| `aws cli` | 2.13+ | Interacción con servicios AWS |
+| `curl` | 7.68+ | Descarga de archivos |
 
 ### Verificación de Prerrequisitos
 ```bash
-# Verificar herramientas
+# Verificar herramientas instaladas
 kubectl version --client
 helm version
 eksctl version
 aws --version
+curl --version
 
 # Verificar conexión al cluster
 kubectl get nodes
 ```
 
+### Permisos AWS Requeridos
+- `eks:DescribeCluster`
+- `iam:CreateRole`, `iam:AttachRolePolicy`, `iam:CreatePolicy`
+- `ec2:DescribeSecurityGroups`, `ec2:DescribeSubnets`
+- `sts:GetCallerIdentity`
+
 ---
 
-## Variables de Configuración
+## Estructura del Proyecto
 
-Crea un archivo de configuración con tus variables:
+```
+prueba_controladores/
+├── config.env                     # Configuración principal
+├── install-all-controllers.sh     # Script maestro de instalación
+├── install-aws-lb-controller.sh   # Instalador AWS Load Balancer Controller
+├── install-nginx-ingress.sh       # Instalador NGINX Ingress Controller
+├── install-cluster-autoscaler.sh  # Instalador Cluster Autoscaler
+├── deploy-nodeclass-nodepool.sh   # Despliegue EKS Auto Mode
+├── uninstall-controllers.sh       # Desinstalador
+├── verify-installation.sh         # Verificador de instalación
+├── monitor-app.sh                 # Monitor de aplicaciones
+├── auto-mode/                     # Configuraciones EKS Auto Mode
+│   ├── nodeclass.yaml
+│   ├── nodepool.yaml
+│   └── test-pod.yaml
+├── *.yaml                         # Manifiestos de ejemplo
+└── README.md                      # Esta documentación
+```
+
+---
+
+## Configuración
+
+### Archivo config.env
+
+El archivo `config.env` contiene todas las variables de configuración necesarias:
 
 ```bash
-# config.env
+# =============================================================================
+# CONFIGURACIÓN PRINCIPAL
+# =============================================================================
+
+# 🎯 SWITCHES DE INSTALACIÓN
+export INSTALL_AWS_LB_CONTROLLER="true"
+export INSTALL_NGINX_CONTROLLER="true"
+export INSTALL_CLUSTER_AUTOSCALER="false"
+export INSTALL_NODECLASS_NODEPOOL="true"
+
+# 🏗️ CONFIGURACIÓN DEL CLUSTER
 export CLUSTER_NAME="mi-cluster-eks"
-export AWS_REGION="us-west-2"
+export AWS_REGION="us-east-1"
 export AWS_ACCOUNT_ID="123456789012"
 export VPC_ID="vpc-xxxxxxxxx"
+export AWS_PROFILE="default"
+
+# 🌐 CONFIGURACIÓN DE RED
+export PUBLIC_SUBNETS="subnet-abc123,subnet-def456"
+export PRIVATE_SUBNETS="subnet-ghi789,subnet-jkl012"
+export SUBNET_TYPE="public"
+export INGRESS_SECURITY_GROUP="sg-xxxxxxxxx"
+
+# 🔐 CERTIFICADOS SSL
+export ACM_CERTIFICATE_ARN="arn:aws:acm:region:account:certificate/cert-id"
+
+# 🚀 CONFIGURACIÓN NGINX
+export NGINX_NAMESPACE="ingress-nginx-ns"
+export NLB_NAME="mi-nlb-ingress"
+export TARGET_TYPE="ip"
+export NGINX_CONTROLLER_VERSION="4.12.7"
+
+# ⚙️ CONFIGURACIÓN AWS LB CONTROLLER
+export AWS_LB_CONTROLLER_VERSION="1.13.2"
+export CREATE_IAM_ROLE="true"
+export CREATE_IAM_POLICY="true"
+export CREATE_SERVICE_ACCOUNT="true"
+
+# 🏗️ EKS AUTO MODE
+export NODECLASS_NAME="test-customize"
+export NODEPOOL_NAME="my-node-pool"
+export NODE_ROLE_NAME="AUTO-MODE"
+export INSTANCE_NAME="mi-instancia-ec2"
+export INSTANCE_CATEGORIES="m,c,r"
+export INSTANCE_CPUS="4,8,16,32"
+export AVAILABILITY_ZONES="us-east-1a,us-east-1b"
+export EPHEMERAL_STORAGE_SIZE="80Gi"
+export CPU_LIMIT="1000"
+export MEMORY_LIMIT="1000Gi"
 ```
 
 ---
 
-## AWS Load Balancer Controller
+## Scripts Disponibles
 
-### 1. Configuración IAM
+### 1. install-all-controllers.sh
+**Propósito:** Script maestro que orquesta la instalación completa
+**Funcionalidades:**
+- Verificación de prerrequisitos
+- Validación de configuración
+- Instalación secuencial de componentes
+- Verificación de estado
+- Reporte de instalación
 
-#### Script: `install-aws-lb-controller.sh`
+**Uso:**
 ```bash
-#!/bin/bash
-
-# Cargar variables
-source config.env
-
-echo "🚀 Instalando AWS Load Balancer Controller..."
-
-# 1. Descargar política IAM
-echo "📥 Descargando política IAM..."
-curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.0/docs/install/iam_policy.json
-
-# 2. Crear política IAM
-echo "🔐 Creando política IAM..."
-aws iam create-policy \
-    --policy-name AWSLoadBalancerControllerIAMPolicy \
-    --policy-document file://iam_policy.json \
-    --region $AWS_REGION || echo "Política ya existe"
-
-# 3. Crear service account con IAM role
-echo "👤 Creando service account..."
-eksctl create iamserviceaccount \
-    --cluster=$CLUSTER_NAME \
-    --namespace=kube-system \
-    --name=aws-load-balancer-controller \
-    --attach-policy-arn=arn:aws:iam::$AWS_ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
-    --override-existing-serviceaccounts \
-    --region $AWS_REGION \
-    --approve
-
-# 4. Agregar repositorio Helm
-echo "📦 Agregando repositorio Helm..."
-helm repo add eks https://aws.github.io/eks-charts
-helm repo update eks
-
-# 5. Instalar AWS Load Balancer Controller
-echo "⚙️ Instalando controlador..."
-helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-    -n kube-system \
-    --set clusterName=$CLUSTER_NAME \
-    --set serviceAccount.create=false \
-    --set serviceAccount.name=aws-load-balancer-controller \
-    --set region=$AWS_REGION \
-    --set vpcId=$VPC_ID \
-    --version 1.13.0
-
-echo "✅ AWS Load Balancer Controller instalado correctamente"
+./install-all-controllers.sh
 ```
 
-### 2. Verificación AWS LB Controller
-```bash
-# Verificar deployment
-kubectl get deployment -n kube-system aws-load-balancer-controller
+### 2. install-aws-lb-controller.sh
+**Propósito:** Instala AWS Load Balancer Controller
+**Funcionalidades:**
+- Descarga de políticas IAM
+- Creación de roles y service accounts
+- Configuración OIDC
+- Instalación vía Helm
+- Configuración automática de VPC
 
-# Verificar logs
-kubectl logs -n kube-system deployment/aws-load-balancer-controller
-```
+**Componentes instalados:**
+- IAM Policy: `EKSLoadBalancerPolicy`
+- IAM Role: `EKSLoadBalancerRole`
+- Service Account: `aws-load-balancer-controller`
+- Helm Chart: `eks/aws-load-balancer-controller`
+
+### 3. install-nginx-ingress.sh
+**Propósito:** Instala NGINX Ingress Controller
+**Funcionalidades:**
+- Configuración de Network Load Balancer
+- Detección automática de security groups
+- Configuración SSL/TLS con ACM
+- Autoscaling y métricas
+- Configuraciones de seguridad
+
+**Componentes instalados:**
+- Namespace: configurable (default: `ingress-nginx-ns`)
+- Helm Chart: `ingress-nginx/ingress-nginx`
+- Network Load Balancer con configuración AWS
+
+### 4. deploy-nodeclass-nodepool.sh
+**Propósito:** Despliega NodeClass y NodePool para EKS Auto Mode
+**Funcionalidades:**
+- Generación dinámica de YAML
+- Configuración de tipos de instancia
+- Selección de subnets y security groups
+- Configuración de límites y disrupciones
+- Etiquetado de instancias EC2
+
+**Recursos creados:**
+- NodeClass: configuración de nodos
+- NodePool: pool de nodos con requisitos específicos
+
+### 5. install-cluster-autoscaler.sh
+**Propósito:** Instala Cluster Autoscaler (opcional)
+**Funcionalidades:**
+- Configuración IAM para autoscaling
+- Instalación vía Helm
+- Configuración de límites de escalado
+
+### 6. uninstall-controllers.sh
+**Propósito:** Desinstala todos los componentes
+**Funcionalidades:**
+- Eliminación de Helm releases
+- Limpieza de namespaces
+- Eliminación de service accounts
+- Limpieza de recursos IAM
+
+### 7. verify-installation.sh
+**Propósito:** Verifica el estado de la instalación
+**Funcionalidades:**
+- Verificación de deployments
+- Estado de pods y servicios
+- Verificación de IngressClasses
+- Obtención de endpoints externos
+
+### 8. monitor-app.sh
+**Propósito:** Monitorea aplicaciones desplegadas
+**Funcionalidades:**
+- Monitoreo en tiempo real de pods
+- Verificación de servicios
+- Estado de ingress
 
 ---
 
-## NGINX Ingress Controller
+## Instalación
 
-### Script: `install-nginx-ingress.sh`
+### Instalación Rápida
 ```bash
-#!/bin/bash
+# 1. Clonar/descargar el proyecto
+cd prueba_controladores
 
-# Cargar variables
-source config.env
+# 2. Configurar variables
+cp config.env.example config.env
+nano config.env  # Editar con tus valores
 
-echo "🚀 Instalando NGINX Ingress Controller..."
+# 3. Hacer scripts ejecutables
+chmod +x *.sh
 
-# 1. Agregar repositorio Helm de NGINX
-echo "📦 Agregando repositorio Helm de NGINX..."
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
-
-# 2. Crear namespace
-echo "📁 Creando namespace..."
-kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply -f -
-
-# 3. Instalar NGINX Ingress Controller
-echo "⚙️ Instalando NGINX Ingress Controller..."
-helm install ingress-nginx ingress-nginx/ingress-nginx \
-    --namespace ingress-nginx \
-    --set controller.service.type=LoadBalancer \
-    --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"="nlb" \
-    --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-cross-zone-load-balancing-enabled"="true" \
-    --set controller.metrics.enabled=true \
-    --set controller.podSecurityContext.fsGroup=2000 \
-    --set controller.podSecurityContext.runAsNonRoot=true \
-    --set controller.podSecurityContext.runAsUser=1000
-
-echo "✅ NGINX Ingress Controller instalado correctamente"
+# 4. Ejecutar instalación completa
+./install-all-controllers.sh
 ```
 
-### Configuración Avanzada NGINX
+### Instalación Selectiva
 ```bash
-# Para configuraciones específicas, crear values.yaml
-cat > nginx-values.yaml << EOF
-controller:
-  replicaCount: 2
-  
-  service:
-    type: LoadBalancer
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
-      service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
-  
-  resources:
-    requests:
-      cpu: 100m
-      memory: 90Mi
-    limits:
-      cpu: 200m
-      memory: 256Mi
-  
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 80
-  
-  metrics:
-    enabled: true
-    serviceMonitor:
-      enabled: true
-EOF
+# Solo AWS Load Balancer Controller
+export INSTALL_AWS_LB_CONTROLLER="true"
+export INSTALL_NGINX_CONTROLLER="false"
+./install-all-controllers.sh
 
-# Instalar con configuración personalizada
-helm install ingress-nginx ingress-nginx/ingress-nginx \
-    --namespace ingress-nginx \
-    --values nginx-values.yaml
+# Solo NGINX Ingress Controller
+export INSTALL_NGINX_CONTROLLER="true"
+export INSTALL_AWS_LB_CONTROLLER="false"
+./install-all-controllers.sh
 ```
 
----
-
-## Scripts de Automatización
-
-### Script Principal: `install-all-controllers.sh`
+### Instalación Manual por Componentes
 ```bash
-#!/bin/bash
-
-set -e
-
-echo "🎯 Iniciando instalación de controladores de ingress..."
-
-# Verificar prerrequisitos
-echo "🔍 Verificando prerrequisitos..."
-command -v kubectl >/dev/null 2>&1 || { echo "kubectl no encontrado"; exit 1; }
-command -v helm >/dev/null 2>&1 || { echo "helm no encontrado"; exit 1; }
-command -v eksctl >/dev/null 2>&1 || { echo "eksctl no encontrado"; exit 1; }
-command -v aws >/dev/null 2>&1 || { echo "aws cli no encontrado"; exit 1; }
-
-# Cargar configuración
-if [ ! -f "config.env" ]; then
-    echo "❌ Archivo config.env no encontrado"
-    exit 1
-fi
-source config.env
-
-# Validar variables
-if [ -z "$CLUSTER_NAME" ] || [ -z "$AWS_REGION" ] || [ -z "$AWS_ACCOUNT_ID" ]; then
-    echo "❌ Variables de configuración faltantes"
-    exit 1
-fi
-
-# Verificar conectividad al cluster
-echo "🔗 Verificando conectividad al cluster..."
-kubectl get nodes > /dev/null || { echo "❌ No se puede conectar al cluster"; exit 1; }
-
-# Instalar AWS Load Balancer Controller
-echo "1️⃣ Instalando AWS Load Balancer Controller..."
+# AWS Load Balancer Controller
 ./install-aws-lb-controller.sh
 
-# Esperar a que esté listo
-echo "⏳ Esperando a que AWS LB Controller esté listo..."
-kubectl wait --for=condition=available --timeout=300s deployment/aws-load-balancer-controller -n kube-system
-
-# Instalar NGINX Ingress Controller
-echo "2️⃣ Instalando NGINX Ingress Controller..."
+# NGINX Ingress Controller
 ./install-nginx-ingress.sh
 
-# Esperar a que esté listo
-echo "⏳ Esperando a que NGINX Ingress esté listo..."
-kubectl wait --for=condition=available --timeout=300s deployment/ingress-nginx-controller -n ingress-nginx
-
-echo "🎉 ¡Instalación completada exitosamente!"
-echo ""
-echo "📋 Resumen de instalación:"
-echo "✅ AWS Load Balancer Controller: Instalado"
-echo "✅ NGINX Ingress Controller: Instalado"
-echo ""
-echo "🔍 Para verificar el estado:"
-echo "kubectl get pods -n kube-system | grep aws-load-balancer"
-echo "kubectl get pods -n ingress-nginx"
+# EKS Auto Mode NodeClass/NodePool
+./deploy-nodeclass-nodepool.sh
 ```
 
-### Script de Desinstalación: `uninstall-controllers.sh`
-```bash
-#!/bin/bash
+---
 
-echo "🗑️ Desinstalando controladores..."
+## EKS Auto Mode
 
-# Desinstalar NGINX Ingress
-helm uninstall ingress-nginx -n ingress-nginx || true
-kubectl delete namespace ingress-nginx || true
+### Configuración de NodeClass
+El NodeClass define la configuración base para los nodos:
 
-# Desinstalar AWS Load Balancer Controller
-helm uninstall aws-load-balancer-controller -n kube-system || true
+```yaml
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: test-customize
+spec:
+  role: "AUTO-MODE"
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/role/internal-elb: "1"
+  securityGroupSelectorTerms:
+    - tags:
+        kubernetes.io/sg/nodes: "enabled"
+  ephemeralStorage:
+    size: "80Gi"
+  tags:
+    Name: "mi-instancia-ec2"
+```
 
-# Limpiar service account
-eksctl delete iamserviceaccount \
-    --cluster=$CLUSTER_NAME \
-    --namespace=kube-system \
-    --name=aws-load-balancer-controller \
-    --region $AWS_REGION || true
+### Configuración de NodePool
+El NodePool define los requisitos y límites:
 
-echo "✅ Desinstalación completada"
+```yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: my-node-pool
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: test-customize
+      requirements:
+        - key: "eks.amazonaws.com/instance-category"
+          operator: In
+          values: ["m", "c", "r"]
+        - key: "eks.amazonaws.com/instance-cpu"
+          operator: In
+          values: ["4", "8", "16", "32"]
+  limits:
+    cpu: "1000"
+    memory: 1000Gi
+```
+
+### NodeSelectors Disponibles
+Para dirigir workloads a nodos específicos:
+
+```yaml
+# EKS Auto Mode
+nodeSelector:
+  eks.amazonaws.com/compute-type: auto
+
+# Tipo de instancia específico
+nodeSelector:
+  node.kubernetes.io/instance-type: m5.large
+
+# Zona de disponibilidad
+nodeSelector:
+  topology.kubernetes.io/zone: us-east-1a
+
+# Arquitectura
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+# Categoría de instancia
+nodeSelector:
+  eks.amazonaws.com/instance-category: m
 ```
 
 ---
 
 ## Verificación
 
-### Script de Verificación: `verify-installation.sh`
+### Verificación Automática
 ```bash
-#!/bin/bash
+./verify-installation.sh
+```
 
-echo "🔍 Verificando instalación de controladores..."
-
-# Verificar AWS Load Balancer Controller
-echo "1️⃣ AWS Load Balancer Controller:"
+### Verificación Manual
+```bash
+# AWS Load Balancer Controller
 kubectl get deployment -n kube-system aws-load-balancer-controller
 kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 
-# Verificar NGINX Ingress Controller
-echo ""
-echo "2️⃣ NGINX Ingress Controller:"
-kubectl get deployment -n ingress-nginx ingress-nginx-controller
-kubectl get pods -n ingress-nginx
-kubectl get svc -n ingress-nginx
+# NGINX Ingress Controller
+kubectl get deployment -n ingress-nginx-ns ingress-nginx-controller
+kubectl get svc -n ingress-nginx-ns ingress-nginx-controller
 
-# Obtener Load Balancer externo de NGINX
-echo ""
-echo "🌐 Load Balancer externo de NGINX:"
-kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-echo ""
+# EKS Auto Mode
+kubectl get nodeclass
+kubectl get nodepool
+kubectl get nodes --show-labels
 
-# Verificar IngressClass
-echo ""
-echo "📝 IngressClasses disponibles:"
+# IngressClasses
 kubectl get ingressclass
-
-echo ""
-echo "✅ Verificación completada"
 ```
 
 ### Prueba de Funcionamiento
 ```bash
-# Crear aplicación de prueba
-cat > test-app.yaml << EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: test-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: test-app
-  template:
-    metadata:
-      labels:
-        app: test-app
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:latest
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: test-app-service
-spec:
-  selector:
-    app: test-app
-  ports:
-  - port: 80
-    targetPort: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: test-app-ingress-nginx
-  annotations:
-    kubernetes.io/ingress.class: nginx
-spec:
-  rules:
-  - host: test-nginx.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: test-app-service
-            port:
-              number: 80
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: test-app-ingress-alb
-  annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-spec:
-  rules:
-  - host: test-alb.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: test-app-service
-            port:
-              number: 80
-EOF
+# Aplicar aplicación de prueba
+kubectl apply -f nginx-test-app.yaml
 
-kubectl apply -f test-app.yaml
+# Verificar ingress
+kubectl get ingress
+
+# Obtener URL del Load Balancer
+kubectl get svc -n ingress-nginx-ns ingress-nginx-controller \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 ```
 
 ---
@@ -397,7 +388,7 @@ kubectl apply -f test-app.yaml
 
 ### Problemas Comunes
 
-#### 1. AWS Load Balancer Controller no inicia
+#### 1. AWS Load Balancer Controller
 ```bash
 # Verificar logs
 kubectl logs -n kube-system deployment/aws-load-balancer-controller
@@ -406,80 +397,185 @@ kubectl logs -n kube-system deployment/aws-load-balancer-controller
 kubectl describe sa aws-load-balancer-controller -n kube-system
 
 # Verificar IAM role
-aws iam get-role --role-name AmazonEKSLoadBalancerControllerRole
+aws iam get-role --role-name EKSLoadBalancerRole
 ```
 
-#### 2. NGINX Ingress no obtiene IP externa
+#### 2. NGINX Ingress Controller
 ```bash
 # Verificar service
-kubectl describe svc ingress-nginx-controller -n ingress-nginx
+kubectl describe svc ingress-nginx-controller -n ingress-nginx-ns
 
 # Verificar eventos
-kubectl get events -n ingress-nginx --sort-by='.lastTimestamp'
+kubectl get events -n ingress-nginx-ns --sort-by='.lastTimestamp'
 
-# Verificar security groups y subnets
-aws ec2 describe-security-groups --filters "Name=group-name,Values=*$CLUSTER_NAME*"
+# Verificar Load Balancer
+aws elbv2 describe-load-balancers --names mi-nlb-ingress
 ```
 
-#### 3. Permisos IAM insuficientes
+#### 3. EKS Auto Mode
 ```bash
-# Verificar política actual
+# Verificar NodeClass
+kubectl describe nodeclass test-customize
+
+# Verificar NodePool
+kubectl describe nodepool my-node-pool
+
+# Verificar permisos IAM
+aws iam list-attached-role-policies --role-name AUTO-MODE
+```
+
+#### 4. Permisos IAM
+```bash
+# Verificar identidad actual
+aws sts get-caller-identity
+
+# Verificar políticas
 aws iam get-policy-version \
-    --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
-    --version-id v1
+  --policy-arn arn:aws:iam::ACCOUNT:policy/EKSLoadBalancerPolicy \
+  --version-id v1
 ```
 
 ### Comandos de Diagnóstico
 ```bash
-# Estado general del cluster
-kubectl get nodes
-kubectl get pods --all-namespaces
-
-# Logs de controladores
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+# Estado del cluster
+kubectl cluster-info
+kubectl get nodes -o wide
 
 # Recursos de red
 kubectl get svc --all-namespaces
 kubectl get ingress --all-namespaces
-kubectl get ingressclass
+
+# Logs de sistema
+kubectl logs -n kube-system -l k8s-app=aws-load-balancer-controller
+kubectl logs -n ingress-nginx-ns -l app.kubernetes.io/name=ingress-nginx
+
+# Eventos del cluster
+kubectl get events --sort-by='.lastTimestamp' --all-namespaces
+```
+
+### Solución de Problemas de Red
+```bash
+# Verificar VPC y subnets
+aws ec2 describe-vpcs --vpc-ids $VPC_ID
+aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID"
+
+# Verificar security groups
+aws ec2 describe-security-groups --group-ids $INGRESS_SECURITY_GROUP
+
+# Verificar route tables
+aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$VPC_ID"
 ```
 
 ---
 
-## Uso de los Scripts
+## Seguridad
 
-1. **Preparación:**
-   ```bash
-   chmod +x *.sh
-   cp config.env.example config.env
-   # Editar config.env con tus valores
-   ```
+### Ofuscación de Datos Sensibles
+Los scripts incluyen una función para ofuscar datos sensibles:
 
-2. **Instalación:**
-   ```bash
-   ./install-all-controllers.sh
-   ```
+```bash
+# Función automática en todos los scripts
+mask_account_id() {
+    sed "s/$AWS_ACCOUNT_ID/***masked***/g"
+}
+```
 
-3. **Verificación:**
-   ```bash
-   ./verify-installation.sh
-   ```
+**Datos ofuscados:**
+- AWS Account ID
+- ARNs de recursos
+- Contextos de kubectl
+- Salidas de comandos AWS CLI
 
-4. **Prueba:**
-   ```bash
-   kubectl apply -f test-app.yaml
-   ```
+### Mejores Prácticas de Seguridad
+1. **IAM Roles:** Usar roles específicos con permisos mínimos
+2. **Network Security:** Configurar security groups restrictivos
+3. **Encryption:** Usar certificados ACM para TLS
+4. **Monitoring:** Habilitar logs y métricas
+5. **Updates:** Mantener versiones actualizadas
 
-5. **Limpieza (si es necesario):**
-   ```bash
-   ./uninstall-controllers.sh
-   ```
+### Configuración de Security Groups
+```bash
+# Security group para Load Balancer
+aws ec2 create-security-group \
+  --group-name eks-ingress-sg \
+  --description "Security group for EKS Ingress" \
+  --vpc-id $VPC_ID
+
+# Reglas de entrada
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-xxxxxxxxx \
+  --protocol tcp \
+  --port 80 \
+  --cidr 0.0.0.0/0
+
+aws ec2 authorize-security-group-ingress \
+  --group-id sg-xxxxxxxxx \
+  --protocol tcp \
+  --port 443 \
+  --cidr 0.0.0.0/0
+```
+
+---
+
+## Costos Estimados
+
+| Componente | Costo Mensual Aproximado |
+|------------|-------------------------|
+| Network Load Balancer | $16-45 USD |
+| Application Load Balancer | $16-22 USD |
+| Data Processing | $0.006-0.008 por GB |
+| EC2 Instances (Auto Mode) | Variable según uso |
+| EBS Storage | $0.10 por GB-mes |
+
+### Optimización de Costos
+1. **Spot Instances:** Usar en NodePools para cargas no críticas
+2. **Autoscaling:** Configurar límites apropiados
+3. **Resource Limits:** Definir requests y limits en pods
+4. **Monitoring:** Usar métricas para optimizar recursos
+
+---
+
+## Versionado y Compatibilidad
+
+### Versiones Soportadas
+- **Kubernetes:** 1.24+
+- **EKS:** 1.24+
+- **AWS Load Balancer Controller:** 2.4+
+- **NGINX Ingress Controller:** 1.8+
+- **Helm:** 3.8+
+
+### Matriz de Compatibilidad
+| EKS Version | AWS LB Controller | NGINX Ingress | Karpenter |
+|-------------|-------------------|---------------|-----------|
+| 1.28 | 2.6+ | 1.9+ | 0.32+ |
+| 1.27 | 2.5+ | 1.8+ | 0.31+ |
+| 1.26 | 2.4+ | 1.7+ | 0.30+ |
+
+---
+
+## Contribución y Soporte
+
+### Estructura de Logs
+Los scripts generan logs detallados con emojis para facilitar la lectura:
+- 🚀 Inicio de procesos
+- ✅ Operaciones exitosas
+- ❌ Errores
+- ⚠️ Advertencias
+- 🔍 Verificaciones
+- 📦 Instalaciones
+- 🔧 Configuraciones
+
+### Reportar Problemas
+1. Ejecutar `./verify-installation.sh`
+2. Recopilar logs: `kubectl logs -n kube-system deployment/aws-load-balancer-controller`
+3. Verificar configuración: `cat config.env`
+4. Incluir versiones de herramientas
 
 ---
 
 **Notas Importantes:**
-- Asegúrate de tener los permisos IAM adecuados
-- Verifica que tu VPC tenga subnets públicas y privadas correctamente configuradas
-- Los Load Balancers de AWS pueden tardar varios minutos en estar disponibles
-- Mantén actualizadas las versiones de los controladores para seguridad
+- Todos los scripts incluyen validación de prerrequisitos
+- Los datos sensibles se ofuscan automáticamente en la salida
+- Los Load Balancers pueden tardar 5-10 minutos en estar disponibles
+- Mantener actualizadas las versiones para seguridad y compatibilidad
+- Verificar límites de AWS Service Quotas antes de la instalación
