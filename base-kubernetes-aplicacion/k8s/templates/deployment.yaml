@@ -23,6 +23,10 @@ spec:
       {{- if .Values.serviceAccount.enabled }}
       serviceAccountName: {{ .Values.appName }}-sa
       {{- end }}
+      {{- if .Values.nodeSelector.enabled }}
+      nodeSelector: 
+        eks.amazonaws.com/compute-type: auto
+      {{- end }}
       containers:
       - name: {{ .Values.appName }}
         image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
