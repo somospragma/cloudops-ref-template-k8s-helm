@@ -45,6 +45,26 @@ spec:
     size: "EPHEMERAL_STORAGE_SIZE_PLACEHOLDER"
   tags:
     Name: "INSTANCE_NAME_PLACEHOLDER"
+    # Enterprise Tags
+    cost-center: "TAG_COST_CENTER_PLACEHOLDER"
+    tribu: "TAG_TRIBU_PLACEHOLDER"
+    squad: "TAG_SQUAD_PLACEHOLDER"
+    backup: "TAG_BACKUP_PLACEHOLDER"
+    updated-date: "$(date +%Y-%m-%d)"
+    country: "TAG_COUNTRY_PLACEHOLDER"
+    application-name: "TAG_APPLICATION_NAME_PLACEHOLDER"
+    company: "TAG_COMPANY_PLACEHOLDER"
+    disaster-recovery: "TAG_DISASTER_RECOVERY_PLACEHOLDER"
+    bia: "TAG_BIA_PLACEHOLDER"
+    confidentiality: "TAG_CONFIDENTIALITY_PLACEHOLDER"
+    integrity: "TAG_INTEGRITY_PLACEHOLDER"
+    availability: "TAG_AVAILABILITY_PLACEHOLDER"
+    pci: "TAG_PCI_PLACEHOLDER"
+    environment: "TAG_ENVIRONMENT_PLACEHOLDER"
+    map-migrated: "TAG_MAP_MIGRATED_PLACEHOLDER"
+    tfmodule: "TAG_TFMODULE_PLACEHOLDER"
+    schedule: "TAG_SCHEDULE_PLACEHOLDER"
+    personal-data: "TAG_PERSONAL_DATA_PLACEHOLDER"
 ---
 apiVersion: karpenter.sh/v1
 kind: NodePool
@@ -70,9 +90,20 @@ spec:
         - key: "kubernetes.io/arch"
           operator: In
           values: ["NODE_ARCHITECTURE_PLACEHOLDER"]
+        - key: "kubernetes.io/os"
+          operator: In
+          values: ["NODE_OS_PLACEHOLDER"]
         - key: "karpenter.sh/capacity-type"
           operator: In
           values: ["CAPACITY_TYPE_PLACEHOLDER"]
+        - key: "CUSTOM_LABEL_KEY_PLACEHOLDER"
+          operator: In
+          values: ["CUSTOM_LABEL_VALUE_PLACEHOLDER"]
+  disruption:
+    consolidationPolicy: CONSOLIDATION_POLICY_PLACEHOLDER
+    consolidateAfter: CONSOLIDATE_AFTER_PLACEHOLDER
+    budgets:
+    - nodes: "DISRUPTION_BUDGET_PLACEHOLDER"
   limits:
     cpu: "CPU_LIMIT_PLACEHOLDER"
     memory: MEMORY_LIMIT_PLACEHOLDER
@@ -86,10 +117,36 @@ sed -i.bak "s/EPHEMERAL_STORAGE_SIZE_PLACEHOLDER/$EPHEMERAL_STORAGE_SIZE/g" node
 sed -i.bak "s/NODEPOOL_NAME_PLACEHOLDER/$NODEPOOL_NAME/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/BILLING_TEAM_PLACEHOLDER/$BILLING_TEAM/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/NODE_ARCHITECTURE_PLACEHOLDER/$NODE_ARCHITECTURE/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/NODE_OS_PLACEHOLDER/$NODE_OS/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/CPU_LIMIT_PLACEHOLDER/$CPU_LIMIT/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/MEMORY_LIMIT_PLACEHOLDER/$MEMORY_LIMIT/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/INSTANCE_NAME_PLACEHOLDER/$INSTANCE_NAME/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/CAPACITY_TYPE_PLACEHOLDER/$CAPACITY_TYPE/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/CUSTOM_LABEL_KEY_PLACEHOLDER/$CUSTOM_LABEL_KEY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/CUSTOM_LABEL_VALUE_PLACEHOLDER/$CUSTOM_LABEL_VALUE/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/CONSOLIDATION_POLICY_PLACEHOLDER/$CONSOLIDATION_POLICY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/CONSOLIDATE_AFTER_PLACEHOLDER/$CONSOLIDATE_AFTER/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/DISRUPTION_BUDGET_PLACEHOLDER/$DISRUPTION_BUDGET/g" nodeclass-nodepool-generated.yaml
+
+# Reemplazar tags empresariales
+sed -i.bak "s/TAG_COST_CENTER_PLACEHOLDER/$TAG_COST_CENTER/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_TRIBU_PLACEHOLDER/$TAG_TRIBU/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_SQUAD_PLACEHOLDER/$TAG_SQUAD/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_BACKUP_PLACEHOLDER/$TAG_BACKUP/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_COUNTRY_PLACEHOLDER/$TAG_COUNTRY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_APPLICATION_NAME_PLACEHOLDER/$TAG_APPLICATION_NAME/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_COMPANY_PLACEHOLDER/$TAG_COMPANY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_DISASTER_RECOVERY_PLACEHOLDER/$TAG_DISASTER_RECOVERY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_BIA_PLACEHOLDER/$TAG_BIA/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_CONFIDENTIALITY_PLACEHOLDER/$TAG_CONFIDENTIALITY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_INTEGRITY_PLACEHOLDER/$TAG_INTEGRITY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_AVAILABILITY_PLACEHOLDER/$TAG_AVAILABILITY/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_PCI_PLACEHOLDER/$TAG_PCI/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_ENVIRONMENT_PLACEHOLDER/$TAG_ENVIRONMENT/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_MAP_MIGRATED_PLACEHOLDER/$TAG_MAP_MIGRATED/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_TFMODULE_PLACEHOLDER/$TAG_TFMODULE/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_SCHEDULE_PLACEHOLDER/$TAG_SCHEDULE/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/TAG_PERSONAL_DATA_PLACEHOLDER/$TAG_PERSONAL_DATA/g" nodeclass-nodepool-generated.yaml
 
 # Convertir listas separadas por comas a formato JSON array
 FAMILIES_JSON="["

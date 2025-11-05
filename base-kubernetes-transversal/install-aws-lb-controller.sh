@@ -55,9 +55,14 @@ if [[ "$CURRENT_CONTEXT" != *"$CLUSTER_NAME"* ]]; then
     echo "   Actual: $CURRENT_CONTEXT"
 fi
 
-# 1. Descargar política IAM
-echo "📥 Descargando política IAM..."
-curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.0/docs/install/iam_policy.json
+# 1. Verificar política IAM local
+echo "📄 Usando política IAM local..."
+if [ ! -f "iam_policy.json" ]; then
+    echo "❌ Archivo iam_policy.json no encontrado"
+    echo "El archivo de política IAM debe estar en el directorio actual"
+    exit 1
+fi
+echo "✅ Política IAM encontrada localmente"
 
 # 2. Crear política IAM específica para este cluster
 POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
@@ -139,7 +144,7 @@ EOF
 kubectl apply -f service-account.yaml | mask_account_id
 
 # Limpiar archivos temporales
-rm -f trust-policy.json service-account.yaml iam_policy.json
+rm -f trust-policy.json service-account.yaml
 
 # 5. Agregar repositorio Helm
 echo "📦 Agregando repositorio Helm..."

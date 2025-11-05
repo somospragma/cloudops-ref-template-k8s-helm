@@ -113,19 +113,13 @@ kubectl get ns --no-headers | awk '{print "     " $1}' | head -10
 echo ""
 echo "🔍 Verificando controladores existentes..."
 if kubectl get deployment aws-load-balancer-controller -n kube-system >/dev/null 2>&1; then
-    echo "   ⚠️ AWS Load Balancer Controller ya existe"
-    if ! confirm "¿Continuar con la instalación (sobrescribirá)?"; then
-        exit 0
-    fi
+    echo "   ⚠️ AWS Load Balancer Controller ya existe - será actualizado"
 else
     echo "   ✅ AWS Load Balancer Controller no encontrado"
 fi
 
 if kubectl get deployment ingress-nginx-controller -n ${NGINX_NAMESPACE:-ingress-nginx} >/dev/null 2>&1; then
-    echo "   ⚠️ NGINX Ingress Controller ya existe en namespace ${NGINX_NAMESPACE:-ingress-nginx}"
-    if ! confirm "¿Continuar con la instalación (sobrescribirá)?"; then
-        exit 0
-    fi
+    echo "   ⚠️ NGINX Ingress Controller ya existe en namespace ${NGINX_NAMESPACE:-ingress-nginx} - será actualizado"
 else
     echo "   ✅ NGINX Ingress Controller no encontrado"
 fi
@@ -147,24 +141,23 @@ echo "✅ Autenticado como: $CALLER_IDENTITY"
 # Hacer scripts ejecutables
 chmod +x install-aws-lb-controller.sh
 chmod +x install-nginx-ingress.sh
-chmod +x install-cluster-autoscaler.sh
 chmod +x deploy-nodeclass-nodepool.sh
 
 echo ""
 # Verificar si hay algo que instalar
-if [ "$INSTALL_AWS_LB_CONTROLLER" != "true" ] && [ "$INSTALL_NGINX_CONTROLLER" != "true" ] && [ "$INSTALL_CLUSTER_AUTOSCALER" != "true" ] && [ "$INSTALL_NODECLASS_NODEPOOL" != "true" ]; then
+if [ "$INSTALL_AWS_LB_CONTROLLER" != "true" ] && [ "$INSTALL_NGINX_CONTROLLER" != "true" ] && [ "$INSTALL_NODECLASS_NODEPOOL" != "true" ]; then
     echo ""
     echo "⚠️ NADA QUE INSTALAR"
     echo "=================================================="
     echo "❌ Todos los componentes están deshabilitados:"
     echo "   - AWS Load Balancer Controller: $INSTALL_AWS_LB_CONTROLLER"
     echo "   - NGINX Ingress Controller: $INSTALL_NGINX_CONTROLLER"
-    echo "   - Cluster Autoscaler: $INSTALL_CLUSTER_AUTOSCALER"
+    echo "   - NodeClass y NodePool: $INSTALL_NODECLASS_NODEPOOL"
     echo ""
     echo "💡 Para instalar componentes, edita config.env y cambia:"
     echo "   export INSTALL_AWS_LB_CONTROLLER=\"true\""
     echo "   export INSTALL_NGINX_CONTROLLER=\"true\""
-    echo "   export INSTALL_CLUSTER_AUTOSCALER=\"true\""
+    echo "   export INSTALL_NODECLASS_NODEPOOL=\"true\""
     echo "=================================================="
     exit 0
 fi
@@ -215,31 +208,12 @@ else
     echo "⏭️ NGINX Ingress Controller deshabilitado (INSTALL_NGINX_CONTROLLER=$INSTALL_NGINX_CONTROLLER)"
 fi
 
-# Instalar Cluster Autoscaler
-if [ "$INSTALL_CLUSTER_AUTOSCALER" = "true" ]; then
-    echo ""
-    echo "3️⃣ INSTALANDO CLUSTER AUTOSCALER"
-    echo "--------------------------------"
-    if ./install-cluster-autoscaler.sh; then
-        echo "✅ Cluster Autoscaler instalado exitosamente"
-        
-        echo ""
-        echo "⏳ Verificando estado del Cluster Autoscaler..."
-        sleep 10
-        kubectl get deployment cluster-autoscaler -n kube-system
-    else
-        echo "❌ Error instalando Cluster Autoscaler"
-        exit 1
-    fi
-else
-    echo ""
-    echo "⏭️ Cluster Autoscaler deshabilitado (INSTALL_CLUSTER_AUTOSCALER=$INSTALL_CLUSTER_AUTOSCALER)"
-fi
+
 
 # Instalar NodeClass y NodePool
 if [ "$INSTALL_NODECLASS_NODEPOOL" = "true" ]; then
     echo ""
-    echo "4️⃣ INSTALANDO NODECLASS Y NODEPOOL"
+    echo "3️⃣ INSTALANDO NODECLASS Y NODEPOOL"
     echo "-----------------------------------"
     if ./deploy-nodeclass-nodepool.sh; then
         echo "✅ NodeClass y NodePool instalados exitosamente"
@@ -277,11 +251,7 @@ else
     echo "⏭️ NGINX Ingress Controller: Deshabilitado"
 fi
 
-if [ "$INSTALL_CLUSTER_AUTOSCALER" = "true" ]; then
-    echo "✅ Cluster Autoscaler: Instalado en namespace kube-system"
-else
-    echo "⏭️ Cluster Autoscaler: Deshabilitado"
-fi
+
 
 if [ "$INSTALL_NODECLASS_NODEPOOL" = "true" ]; then
     echo "✅ NodeClass y NodePool: Instalados para EKS Auto Mode"

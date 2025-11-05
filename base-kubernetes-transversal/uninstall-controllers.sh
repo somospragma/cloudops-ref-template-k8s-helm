@@ -26,7 +26,6 @@ confirm() {
 echo "⚠️ Esta acción eliminará:"
 echo "   - AWS Load Balancer Controller"
 echo "   - NGINX Ingress Controller"
-echo "   - Cluster Autoscaler"
 echo "   - Service Accounts asociados"
 echo "   - Recursos IAM asociados"
 echo ""
@@ -68,33 +67,11 @@ else
     echo "   ℹ️ AWS Load Balancer Controller no encontrado via Helm"
 fi
 
-# 3. Desinstalar Cluster Autoscaler
+
+
+# 3. Eliminar Service Account y IAM role de AWS LB Controller
 echo ""
-echo "3️⃣ Desinstalando Cluster Autoscaler..."
-if kubectl get deployment cluster-autoscaler -n kube-system >/dev/null 2>&1; then
-    kubectl delete deployment cluster-autoscaler -n kube-system
-    echo "   ✅ Cluster Autoscaler deployment eliminado"
-else
-    echo "   ℹ️ Cluster Autoscaler deployment no encontrado"
-fi
-
-# Eliminar RBAC de Cluster Autoscaler
-kubectl delete clusterrole cluster-autoscaler 2>/dev/null || echo "   ℹ️ ClusterRole cluster-autoscaler no encontrado"
-kubectl delete clusterrolebinding cluster-autoscaler 2>/dev/null || echo "   ℹ️ ClusterRoleBinding cluster-autoscaler no encontrado"
-kubectl delete role cluster-autoscaler -n kube-system 2>/dev/null || echo "   ℹ️ Role cluster-autoscaler no encontrado"
-kubectl delete rolebinding cluster-autoscaler -n kube-system 2>/dev/null || echo "   ℹ️ RoleBinding cluster-autoscaler no encontrado"
-
-# Eliminar Service Account de Cluster Autoscaler
-if kubectl get sa cluster-autoscaler -n kube-system >/dev/null 2>&1; then
-    kubectl delete sa cluster-autoscaler -n kube-system
-    echo "   ✅ Service Account cluster-autoscaler eliminado"
-else
-    echo "   ℹ️ Service Account cluster-autoscaler no encontrado"
-fi
-
-# 4. Eliminar Service Account y IAM role de AWS LB Controller
-echo ""
-echo "4️⃣ Eliminando Service Account y IAM role de AWS LB Controller..."
+echo "3️⃣ Eliminando Service Account y IAM role de AWS LB Controller..."
 if kubectl get sa aws-load-balancer-controller -n kube-system >/dev/null 2>&1; then
     kubectl delete sa aws-load-balancer-controller -n kube-system
     echo "   ✅ Service Account eliminado"
@@ -104,8 +81,8 @@ fi
 
 # Eliminar IAM role específico del cluster
 if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
-    ROLE_NAME="EKSLoadBalancerRole"
-    POLICY_NAME="EKSLoadBalancerPolicy"
+    ROLE_NAME="AmazonEKSLoadBalancerControllerRole"
+    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
     
     aws iam detach-role-policy \
         --role-name $ROLE_NAME \
@@ -121,9 +98,9 @@ else
     echo "   ⚠️ AWS_ACCOUNT_ID o CLUSTER_NAME no definidos, no se puede eliminar IAM role"
 fi
 
-# 5. Limpiar CRDs (opcional)
+# 4. Limpiar CRDs (opcional)
 echo ""
-echo "5️⃣ Limpiando Custom Resource Definitions..."
+echo "4️⃣ Limpiando Custom Resource Definitions..."
 if confirm "¿Eliminar CRDs de AWS Load Balancer Controller? (Esto puede afectar otros clusters)"; then
     kubectl delete crd ingressclassparams.elbv2.k8s.aws 2>/dev/null || echo "   ℹ️ CRD ingressclassparams no encontrado"
     kubectl delete crd targetgroupbindings.elbv2.k8s.aws 2>/dev/null || echo "   ℹ️ CRD targetgroupbindings no encontrado"
@@ -132,11 +109,11 @@ else
     echo "   ℹ️ CRDs conservados"
 fi
 
-# 6. Limpiar políticas IAM específicas del cluster
+# 5. Limpiar políticas IAM específicas del cluster
 echo ""
-echo "6️⃣ Limpiando políticas IAM específicas del cluster..."
+echo "5️⃣ Limpiando políticas IAM específicas del cluster..."
 if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
-    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy-${CLUSTER_NAME}"
+    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
     if confirm "¿Eliminar política IAM específica $POLICY_NAME?"; then
         aws iam delete-policy \
             --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \
@@ -150,39 +127,9 @@ else
     echo "   ⚠️ AWS_ACCOUNT_ID o CLUSTER_NAME no definidos, no se puede eliminar política IAM"
 fi
 
-# Limpiar IAM role y policy de Cluster Autoscaler
-if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
-    CA_ROLE_NAME="AmazonEKSClusterAutoscalerRole-${CLUSTER_NAME}"
-    CA_POLICY_NAME="AmazonEKSClusterAutoscalerPolicy-${CLUSTER_NAME}"
-    
-    # Desvincular y eliminar role de Cluster Autoscaler
-    aws iam detach-role-policy \
-        --role-name $CA_ROLE_NAME \
-        --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$CA_POLICY_NAME \
-        2>/dev/null || echo "   ℹ️ Política de Cluster Autoscaler ya desvinculada"
-    
-    aws iam delete-role \
-        --role-name $CA_ROLE_NAME \
-        2>/dev/null || echo "   ℹ️ Role de Cluster Autoscaler no encontrado"
-    
-    if confirm "¿Eliminar política IAM de Cluster Autoscaler $CA_POLICY_NAME?"; then
-        aws iam delete-policy \
-            --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$CA_POLICY_NAME \
-            \
-            2>/dev/null || echo "   ⚠️ Error eliminando política de Cluster Autoscaler o no existe"
-        echo "   ✅ Política IAM de Cluster Autoscaler eliminada: $CA_POLICY_NAME"
-    else
-        echo "   ℹ️ Política IAM de Cluster Autoscaler conservada: $CA_POLICY_NAME"
-    fi
-    
-    echo "   ✅ IAM role de Cluster Autoscaler eliminado: $CA_ROLE_NAME"
-else
-    echo "   ⚠️ AWS_ACCOUNT_ID o CLUSTER_NAME no definidos, no se puede eliminar IAM role de Cluster Autoscaler"
-fi
-
-# 8. Eliminar NodeClass y NodePool
+# 6. Eliminar NodeClass y NodePool
 echo ""
-echo "8️⃣ Eliminando NodeClass y NodePool..."
+echo "6️⃣ Eliminando NodeClass y NodePool..."
 if [ "$INSTALL_NODECLASS_NODEPOOL" = "true" ] || kubectl get nodeclass 2>/dev/null | grep -q .; then
     # Eliminar NodePool primero (depende de NodeClass)
     if kubectl get nodepool $NODEPOOL_NAME 2>/dev/null; then
@@ -210,19 +157,18 @@ else
     echo "   ⏭️ NodeClass y NodePool no instalados o no encontrados"
 fi
 
-# 9. Limpiar archivos temporales
+# 7. Limpiar archivos temporales
 echo ""
 echo "7️⃣ Limpiando archivos temporales..."
-rm -f iam_policy.json
 rm -f nginx-values.yaml
 rm -f crds.yaml
-echo "   ✅ Archivos temporales eliminados"
+echo "   ✅ Archivos temporales eliminados (iam_policy.json conservado)"
 
 # 8. Verificación final
 echo ""
 echo "8️⃣ Verificación final..."
 echo "   📋 Deployments restantes en kube-system:"
-kubectl get deployment -n kube-system | grep -E "(aws-load-balancer|ingress|cluster-autoscaler)" || echo "   ✅ No se encontraron deployments de controladores"
+kubectl get deployment -n kube-system | grep -E "(aws-load-balancer|ingress)" || echo "   ✅ No se encontraron deployments de controladores"
 
 echo ""
 echo "   📋 Deployments restantes en $NAMESPACE:"
@@ -241,7 +187,6 @@ echo ""
 echo "📋 RESUMEN:"
 echo "✅ AWS Load Balancer Controller: Eliminado"
 echo "✅ NGINX Ingress Controller: Eliminado"
-echo "✅ Cluster Autoscaler: Eliminado"
 echo "✅ NodeClass y NodePool: Eliminados"
 
 echo "✅ Archivos temporales: Eliminados"

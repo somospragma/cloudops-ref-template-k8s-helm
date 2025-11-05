@@ -52,14 +52,13 @@ kubectl get nodes
 ```
 prueba_controladores/
 ├── config.env                     # Configuración principal
+├── iam_policy.json                # Política IAM local para AWS LB Controller
 ├── install-all-controllers.sh     # Script maestro de instalación
 ├── install-aws-lb-controller.sh   # Instalador AWS Load Balancer Controller
 ├── install-nginx-ingress.sh       # Instalador NGINX Ingress Controller
-├── install-cluster-autoscaler.sh  # Instalador Cluster Autoscaler
 ├── deploy-nodeclass-nodepool.sh   # Despliegue EKS Auto Mode
 ├── uninstall-controllers.sh       # Desinstalador
 ├── verify-installation.sh         # Verificador de instalación
-├── monitor-app.sh                 # Monitor de aplicaciones
 ├── auto-mode/                     # Configuraciones EKS Auto Mode
 │   ├── nodeclass.yaml
 │   ├── nodepool.yaml
@@ -84,7 +83,6 @@ El archivo `config.env` contiene todas las variables de configuración necesaria
 # 🎯 SWITCHES DE INSTALACIÓN
 export INSTALL_AWS_LB_CONTROLLER="true"
 export INSTALL_NGINX_CONTROLLER="true"
-export INSTALL_CLUSTER_AUTOSCALER="false"
 export INSTALL_NODECLASS_NODEPOOL="true"
 
 # 🏗️ CONFIGURACIÓN DEL CLUSTER
@@ -114,6 +112,26 @@ export AWS_LB_CONTROLLER_VERSION="1.13.2"
 export CREATE_IAM_ROLE="true"
 export CREATE_IAM_POLICY="true"
 export CREATE_SERVICE_ACCOUNT="true"
+
+# 🏷️ TAGS EMPRESARIALES PARA INSTANCIAS EC2
+export TAG_COST_CENTER="HN00000000"
+export TAG_TRIBU="Infrastructure"
+export TAG_SQUAD="Platform"
+export TAG_BACKUP="false"
+export TAG_COUNTRY="hnd"
+export TAG_APPLICATION_NAME="risk-compliance"
+export TAG_COMPANY="ban"
+export TAG_DISASTER_RECOVERY="low"
+export TAG_BIA="false"
+export TAG_CONFIDENTIALITY="internal"
+export TAG_INTEGRITY="low"
+export TAG_AVAILABILITY="low"
+export TAG_PCI="false"
+export TAG_ENVIRONMENT="dev"
+export TAG_MAP_MIGRATED="map-ficohsa"
+export TAG_TFMODULE="eks-auto-mode"
+export TAG_SCHEDULE="Honduras"
+export TAG_PERSONAL_DATA="false"
 
 # 🏗️ EKS AUTO MODE
 export NODECLASS_NAME="test-customize"
@@ -149,15 +167,15 @@ export MEMORY_LIMIT="1000Gi"
 ### 2. install-aws-lb-controller.sh
 **Propósito:** Instala AWS Load Balancer Controller
 **Funcionalidades:**
-- Descarga de políticas IAM
+- Usa política IAM local (iam_policy.json)
 - Creación de roles y service accounts
 - Configuración OIDC
 - Instalación vía Helm
 - Configuración automática de VPC
 
 **Componentes instalados:**
-- IAM Policy: `EKSLoadBalancerPolicy`
-- IAM Role: `EKSLoadBalancerRole`
+- IAM Policy: `AWSLoadBalancerControllerIAMPolicy`
+- IAM Role: `AmazonEKSLoadBalancerControllerRole`
 - Service Account: `aws-load-balancer-controller`
 - Helm Chart: `eks/aws-load-balancer-controller`
 
@@ -188,35 +206,22 @@ export MEMORY_LIMIT="1000Gi"
 - NodeClass: configuración de nodos
 - NodePool: pool de nodos con requisitos específicos
 
-### 5. install-cluster-autoscaler.sh
-**Propósito:** Instala Cluster Autoscaler (opcional)
-**Funcionalidades:**
-- Configuración IAM para autoscaling
-- Instalación vía Helm
-- Configuración de límites de escalado
-
-### 6. uninstall-controllers.sh
+### 5. uninstall-controllers.sh
 **Propósito:** Desinstala todos los componentes
 **Funcionalidades:**
 - Eliminación de Helm releases
 - Limpieza de namespaces
 - Eliminación de service accounts
 - Limpieza de recursos IAM
+- Conserva iam_policy.json para futuras instalaciones
 
-### 7. verify-installation.sh
+### 6. verify-installation.sh
 **Propósito:** Verifica el estado de la instalación
 **Funcionalidades:**
 - Verificación de deployments
 - Estado de pods y servicios
 - Verificación de IngressClasses
 - Obtención de endpoints externos
-
-### 8. monitor-app.sh
-**Propósito:** Monitorea aplicaciones desplegadas
-**Funcionalidades:**
-- Monitoreo en tiempo real de pods
-- Verificación de servicios
-- Estado de ingress
 
 ---
 
@@ -243,11 +248,13 @@ chmod +x *.sh
 # Solo AWS Load Balancer Controller
 export INSTALL_AWS_LB_CONTROLLER="true"
 export INSTALL_NGINX_CONTROLLER="false"
+export INSTALL_NODECLASS_NODEPOOL="false"
 ./install-all-controllers.sh
 
 # Solo NGINX Ingress Controller
 export INSTALL_NGINX_CONTROLLER="true"
 export INSTALL_AWS_LB_CONTROLLER="false"
+export INSTALL_NODECLASS_NODEPOOL="false"
 ./install-all-controllers.sh
 ```
 
@@ -276,7 +283,7 @@ kind: NodeClass
 metadata:
   name: test-customize
 spec:
-  role: "AUTO-MODE"
+  role: "AmazonEKSAutoNodeRole"
   subnetSelectorTerms:
     - tags:
         kubernetes.io/role/internal-elb: "1"
@@ -284,9 +291,15 @@ spec:
     - tags:
         kubernetes.io/sg/nodes: "enabled"
   ephemeralStorage:
-    size: "80Gi"
+    size: "20Gi"
   tags:
     Name: "mi-instancia-ec2"
+    # Tags empresariales
+    cost-center: "HN00000000"
+    tribu: "Infrastructure"
+    squad: "Platform"
+    environment: "dev"
+    company: "ban"
 ```
 
 ### Configuración de NodePool
@@ -397,7 +410,7 @@ kubectl logs -n kube-system deployment/aws-load-balancer-controller
 kubectl describe sa aws-load-balancer-controller -n kube-system
 
 # Verificar IAM role
-aws iam get-role --role-name EKSLoadBalancerRole
+aws iam get-role --role-name AmazonEKSLoadBalancerControllerRole
 ```
 
 #### 2. NGINX Ingress Controller
@@ -431,7 +444,7 @@ aws sts get-caller-identity
 
 # Verificar políticas
 aws iam get-policy-version \
-  --policy-arn arn:aws:iam::ACCOUNT:policy/EKSLoadBalancerPolicy \
+  --policy-arn arn:aws:iam::ACCOUNT:policy/AWSLoadBalancerControllerIAMPolicy \
   --version-id v1
 ```
 
@@ -577,5 +590,7 @@ Los scripts generan logs detallados con emojis para facilitar la lectura:
 - Todos los scripts incluyen validación de prerrequisitos
 - Los datos sensibles se ofuscan automáticamente en la salida
 - Los Load Balancers pueden tardar 5-10 minutos en estar disponibles
+- La política IAM se mantiene local en `iam_policy.json` (no se descarga de internet)
+- Los tags empresariales se aplican automáticamente a las instancias EC2
 - Mantener actualizadas las versiones para seguridad y compatibilidad
 - Verificar límites de AWS Service Quotas antes de la instalación
