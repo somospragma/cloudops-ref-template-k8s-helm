@@ -402,7 +402,11 @@ serviceAccount:
       # Ejemplo:
       # iam.amazonaws.com/permitted: ".*"
       # custom-annotation: "custom-value"
-
+nodeSelector:
+  # Habilitar/deshabilitar ServiceAccount
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  # Típicamente habilitado en staging y prod si necesita acceso a AWS/Azure
+  enabled: false
 # =====================================================
 # POD DISRUPTION BUDGET (PDB)
 # =====================================================
