@@ -65,7 +65,7 @@ fi
 echo "✅ Política IAM encontrada localmente"
 
 # 2. Crear política IAM específica para este cluster
-POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
+POLICY_NAME="AWSEKSLBCPolicy-${CLUSTER_NAME}"
 echo "🔐 Creando política IAM específica: $POLICY_NAME..."
 aws iam create-policy \
     --policy-name $POLICY_NAME \
@@ -89,7 +89,7 @@ else
 fi
 
 # 4. Crear IAM role específico para este cluster
-ROLE_NAME="AmazonEKSLoadBalancerControllerRole"
+ROLE_NAME="AWSEKSLBCRole-${CLUSTER_NAME}"
 echo "👤 Creando IAM role específico: $ROLE_NAME..."
 OIDC_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:oidc-provider/${OIDC_URL#https://}"
 

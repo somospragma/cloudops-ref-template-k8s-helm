@@ -107,8 +107,10 @@ fi
 
 # Preparar anotación de certificado ACM si está configurado
 ACM_ANNOTATION=""
+SSL_PORTS_ANNOTATION=""
 if [ ! -z "$ACM_CERTIFICATE_ARN" ] && [ "$ACM_CERTIFICATE_ARN" != "" ]; then
     ACM_ANNOTATION="      service.beta.kubernetes.io/aws-load-balancer-ssl-cert: \"$ACM_CERTIFICATE_ARN\""
+    SSL_PORTS_ANNOTATION="      service.beta.kubernetes.io/aws-load-balancer-ssl-ports: \"https\""
     echo "🔒 Usando certificado ACM: $ACM_CERTIFICATE_ARN"
 else
     echo "ℹ️ No se configuró certificado ACM, usando HTTP"
@@ -118,8 +120,16 @@ cat > nginx-values.yaml << EOF
 controller:
   replicaCount: 2
   
+  # Configuración para manejar SSL del NLB
+  config:
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+    use-proxy-protocol: "false"
+  
   service:
     type: LoadBalancer
+    targetPorts:
+      https: http
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
       service.beta.kubernetes.io/aws-load-balancer-name: "$NLB_NAME"
@@ -130,6 +140,8 @@ controller:
       service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
       service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
       service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "60"
+      service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS13-1-2-2021-06"
+$SSL_PORTS_ANNOTATION
 $ACM_ANNOTATION
   
   resources:

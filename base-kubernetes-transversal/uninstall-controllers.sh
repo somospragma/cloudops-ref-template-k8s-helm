@@ -81,8 +81,8 @@ fi
 
 # Eliminar IAM role específico del cluster
 if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
-    ROLE_NAME="AmazonEKSLoadBalancerControllerRole"
-    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
+    ROLE_NAME="AWSEKSLBCRole-${CLUSTER_NAME}"
+    POLICY_NAME="AWSEKSLBCPolicy-${CLUSTER_NAME}"
     
     aws iam detach-role-policy \
         --role-name $ROLE_NAME \
@@ -113,7 +113,7 @@ fi
 echo ""
 echo "5️⃣ Limpiando políticas IAM específicas del cluster..."
 if [ ! -z "$AWS_ACCOUNT_ID" ] && [ ! -z "$CLUSTER_NAME" ]; then
-    POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
+    POLICY_NAME="AWSEKSLBCPolicy-${CLUSTER_NAME}"
     if confirm "¿Eliminar política IAM específica $POLICY_NAME?"; then
         aws iam delete-policy \
             --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/$POLICY_NAME \

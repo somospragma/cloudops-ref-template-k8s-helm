@@ -40,7 +40,7 @@ spec:
         kubernetes.io/role/internal-elb: "1"
   securityGroupSelectorTerms:
     - tags:
-        kubernetes.io/sg/nodes: "1"
+        kubernetes.io/sg/nodes: "SECURITY_GROUP_TAG_VALUE_PLACEHOLDER"
   ephemeralStorage:
     size: "EPHEMERAL_STORAGE_SIZE_PLACEHOLDER"
   tags:
@@ -113,6 +113,7 @@ EOF
 
 sed -i.bak "s/NODECLASS_NAME_PLACEHOLDER/$NODECLASS_NAME/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/NODE_ROLE_NAME_PLACEHOLDER/$NODE_ROLE_NAME/g" nodeclass-nodepool-generated.yaml
+sed -i.bak "s/SECURITY_GROUP_TAG_VALUE_PLACEHOLDER/$SECURITY_GROUP_TAG_VALUE/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/EPHEMERAL_STORAGE_SIZE_PLACEHOLDER/$EPHEMERAL_STORAGE_SIZE/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/NODEPOOL_NAME_PLACEHOLDER/$NODEPOOL_NAME/g" nodeclass-nodepool-generated.yaml
 sed -i.bak "s/BILLING_TEAM_PLACEHOLDER/$BILLING_TEAM/g" nodeclass-nodepool-generated.yaml
