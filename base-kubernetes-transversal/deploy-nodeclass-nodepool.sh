@@ -14,6 +14,13 @@ if [ ! -f "config.env" ]; then
 fi
 source config.env
 
+# Verificar si se debe instalar NodeClass y NodePool
+if [ "$INSTALL_NODECLASS_NODEPOOL" != "true" ]; then
+    echo "⏭️ NodeClass y NodePool deshabilitados (INSTALL_NODECLASS_NODEPOOL=$INSTALL_NODECLASS_NODEPOOL)"
+    echo "✅ Saltando instalación de NodeClass y NodePool"
+    exit 0
+fi
+
 echo "🚀 Desplegando NodeClass y NodePool..."
 
 # Configurar contexto del cluster automáticamente
@@ -182,19 +189,37 @@ echo "⏳ Esperando a que los recursos estén listos..."
 # Verificar NodeClass
 if kubectl get nodeclass $NODECLASS_NAME 2>/dev/null >/dev/null; then
     echo "   ✅ NodeClass creado: $NODECLASS_NAME"
+    
+    # Verificar que NodeClass esté Ready
+    echo "   ⏳ Esperando que NodeClass cambie a True (60s timeout)..."
+    if kubectl wait --for=condition=Ready --timeout=60s nodeclass/$NODECLASS_NAME 2>/dev/null; then
+        echo "   ✅ NodeClass está Ready - Configuración exitosa"
+    else
+        echo "   ❌ ERROR: NodeClass $NODECLASS_NAME sigue en False después de 60 segundos"
+        kubectl get nodeclass $NODECLASS_NAME 2>/dev/null | mask_account_id
+        exit 1
+    fi
 else
-    echo "   ⚠️ NodeClass no encontrado: $NODECLASS_NAME"
+    echo "   ❌ ERROR: NodeClass no encontrado: $NODECLASS_NAME"
+    exit 1
 fi
 
 # Verificar NodePool
 if kubectl get nodepool $NODEPOOL_NAME 2>/dev/null >/dev/null; then
     echo "   ✅ NodePool creado: $NODEPOOL_NAME"
     
-    # Esperar a que el NodePool esté listo
-    echo "   ⏳ Esperando a que NodePool esté listo..."
-    kubectl wait --for=condition=Ready --timeout=600s nodepool/$NODEPOOL_NAME 2>/dev/null | mask_account_id || echo "   ⚠️ Timeout esperando NodePool (esto es normal, puede tomar varios minutos)"
+    # Verificar que NodePool esté Ready
+    echo "   ⏳ Esperando que NodePool cambie a True (60s timeout)..."
+    if kubectl wait --for=condition=Ready --timeout=60s nodepool/$NODEPOOL_NAME 2>/dev/null; then
+        echo "   ✅ NodePool está Ready - Configuración exitosa"
+    else
+        echo "   ❌ ERROR: NodePool $NODEPOOL_NAME sigue en False después de 60 segundos"
+        kubectl get nodepool $NODEPOOL_NAME 2>/dev/null | mask_account_id
+        exit 1
+    fi
 else
-    echo "   ⚠️ NodePool no encontrado: $NODEPOOL_NAME"
+    echo "   ❌ ERROR: NodePool no encontrado: $NODEPOOL_NAME"
+    exit 1
 fi
 
 echo "✅ NodeClass y NodePool aplicados correctamente"

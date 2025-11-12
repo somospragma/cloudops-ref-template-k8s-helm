@@ -1,4 +1,4 @@
-#!/bin/bash
+ #!/bin/bash
 
 set -e
 
@@ -33,7 +33,6 @@ check_command() {
 echo "🔍 Verificando prerrequisitos..."
 check_command kubectl
 check_command helm
-check_command eksctl
 check_command aws
 check_command curl
 
@@ -76,8 +75,9 @@ if ! kubectl get nodes >/dev/null 2>&1; then
     if aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME 2>&1 | mask_account_id; then
         echo "✅ kubectl reconfigurado exitosamente"
         
-        # Verificar nuevamente
-        if ! kubectl get nodes >/dev/null 2>&1; then
+        # Verificar nuevamente con timeout más largo
+        sleep 5  # Esperar un momento después de reconfigurar
+        if ! timeout 30 kubectl get nodes >/dev/null 2>&1; then
             echo "❌ Aún no se puede conectar al cluster después de reconfigurar"
             echo "Verifica que el cluster '$CLUSTER_NAME' existe en la región '$AWS_REGION'"
             exit 1
