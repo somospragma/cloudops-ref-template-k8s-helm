@@ -19,3 +19,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.sublime-*
+
+# Manifiestos generados
+manifests-*/
+*.yaml.tmp
+values-override-*.yaml
