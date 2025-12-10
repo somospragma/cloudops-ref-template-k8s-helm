@@ -8,45 +8,25 @@ metadata:
     app: {{ .Values.appName }}
     env: {{ .Values.environment }}
   annotations:
-    # Nginx Ingress Controller annotations
-    {{- if .Values.ingress.annotations.sslRedirect }}
-    nginx.ingress.kubernetes.io/ssl-redirect: {{ .Values.ingress.annotations.sslRedirect | quote }}
+    # AWS Load Balancer Controller annotations
+    {{- if .Values.ingress.group.enabled }}
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.annotations.awsGroupName | quote }}
+    alb.ingress.kubernetes.io/listen-ports: {{ .Values.ingress.annotations.awsListenPorts | quote }}
     {{- end }}
-    {{- if .Values.ingress.annotations.forceSSLRedirect }}
-    nginx.ingress.kubernetes.io/force-ssl-redirect: {{ .Values.ingress.annotations.forceSSLRedirect | quote }}
-    {{- end }}
-    {{- if .Values.ingress.annotations.rewriteTarget }}
-    nginx.ingress.kubernetes.io/rewrite-target: {{ .Values.ingress.annotations.rewriteTarget }}
-    {{- end }}
-    # AWS Load Balancer Controller annotations (si usas AWS)
+
     {{- if eq .Values.ingress.className "alb" }}
-    alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.annotations.awsScheme | default "internet-facing" }}
     alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.annotations.awsTargetType | default "ip" }}
-    {{- if .Values.ingress.annotations.awsCertificateArn }}
-    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.annotations.awsCertificateArn }}
+    alb.ingress.kubernetes.io/backend-protocol: {{ .Values.ingress.annotations.awsBackendProtocol | default "HTTP" }}
+    alb.ingress.kubernetes.io/success-codes: {{ .Values.ingress.annotations.awsSuccessCodes | default "200" }}
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.annotations.awsHealthcheckPath | default "/actuator/health" }}
     {{- end }}
-    {{- end }}
-    # mTLS annotations (opcional - para seguridad avanzada)
-    {{- if .Values.ingress.mtls.enabled }}
-    nginx.ingress.kubernetes.io/auth-tls-secret: "{{ .Values.namespace }}/{{ .Values.ingress.mtls.secretName }}"
-    nginx.ingress.kubernetes.io/auth-tls-verify-client: {{ .Values.ingress.mtls.verifyClient | quote }}
-    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: {{ .Values.ingress.mtls.passCertToUpstream | quote }}
-    {{- end }}
+
     # Custom annotations adicionales
     {{- range $key, $value := .Values.ingress.annotations.custom }}
     {{ $key }}: {{ $value | quote }}
     {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
-
-  {{- if .Values.ingress.tls.enabled }}
-  tls:
-    - hosts:
-        {{- range .Values.ingress.tls.hosts }}
-        - {{ . }}
-        {{- end }}
-      secretName: {{ .Values.ingress.tls.secretName }}
-  {{- end }}
 
   rules:
     {{- range .Values.ingress.rules }}
