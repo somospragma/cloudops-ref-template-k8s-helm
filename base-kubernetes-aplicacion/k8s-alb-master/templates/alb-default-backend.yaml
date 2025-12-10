@@ -1,0 +1,61 @@
+{{- if and .Values.albMaster.enabled .Values.albMaster.defaultBackend.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.albMaster.defaultBackend.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.albMaster.defaultBackend.name }}
+    env: {{ .Values.environment }}
+    type: default-backend
+spec:
+  replicas: {{ .Values.albMaster.defaultBackend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.albMaster.defaultBackend.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.albMaster.defaultBackend.name }}
+        env: {{ .Values.environment }}
+    spec:
+      containers:
+      - name: default-backend
+        image: {{ .Values.albMaster.defaultBackend.image.registry }}/{{ .Values.albMaster.defaultBackend.image.repository }}:{{ .Values.albMaster.defaultBackend.image.tag }}
+        imagePullPolicy: {{ .Values.albMaster.defaultBackend.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.albMaster.defaultBackend.container.port }}
+          name: http
+        resources:
+          {{- toYaml .Values.albMaster.defaultBackend.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.albMaster.defaultBackend.container.livenessProbe.path }}
+            port: {{ .Values.albMaster.defaultBackend.container.port }}
+          initialDelaySeconds: {{ .Values.albMaster.defaultBackend.container.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.albMaster.defaultBackend.container.livenessProbe.periodSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.albMaster.defaultBackend.container.readinessProbe.path }}
+            port: {{ .Values.albMaster.defaultBackend.container.port }}
+          initialDelaySeconds: {{ .Values.albMaster.defaultBackend.container.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.albMaster.defaultBackend.container.readinessProbe.periodSeconds }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.albMaster.defaultBackend.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ .Values.albMaster.defaultBackend.name }}
+    env: {{ .Values.environment }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.albMaster.defaultBackend.service.port }}
+    targetPort: {{ .Values.albMaster.defaultBackend.container.port }}
+    protocol: TCP
+    name: http
+  selector:
+    app: {{ .Values.albMaster.defaultBackend.name }}
+{{- end }}

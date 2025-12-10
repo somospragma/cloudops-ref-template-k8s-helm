@@ -1,0 +1,221 @@
+# =====================================================
+# ALB MASTER - CONFIGURACIÓN CENTRALIZADA
+# =====================================================
+# NOTA: Este archivo define un ALB master donde otros Ingress se acoplan
+#       Usar el mismo groupName en otros Ingress para compartir este ALB
+
+# =====================================================
+# CONFIGURACIÓN BÁSICA DEL ALB MASTER
+# =====================================================
+
+albMaster:
+  # Habilitar/deshabilitar ALB Master
+  # ⚠️ OVERRIDE - Se habilita/deshabilita por ambiente desde .env.*
+  # Típicamente habilitado en staging y prod
+  enabled: false
+
+  # Nombre del ALB Master
+  # ✅ FIJO - Nombre identificativo del ALB
+  name: "cluster"
+
+  # Nombre del grupo ALB (CRÍTICO: otros Ingress deben usar el mismo)
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_GROUP_NAME
+  # IMPORTANTE: Todos los Ingress que quieran usar este ALB deben tener el mismo groupName
+  groupName: "main-alb-group"
+
+  # Clase del Ingress Controller
+  # ✅ FIJO - Siempre "alb" para AWS Application Load Balancer
+  className: "alb"
+
+  # Servicio por defecto (catch-all) - donde van las peticiones no matcheadas
+  # ⚠️ OVERRIDE - Se sobrescribe desde .env.* si es necesario
+  defaultService:
+    name: "default-backend"     # Nombre del servicio por defecto
+    port: 80                    # Puerto del servicio por defecto
+
+  # Path por defecto (catch-all)
+  # ✅ FIJO - Normalmente "/" para capturar todo el tráfico no matcheado
+  defaultPath: "/"
+  defaultPathType: "Prefix"
+
+  # =====================================================
+  # CONFIGURACIÓN SSL/TLS
+  # =====================================================
+  ssl:
+    # Habilitar SSL/TLS
+    # ⚠️ OVERRIDE - Se habilita/deshabilita desde .env.* con SSL_ENABLED
+    enabled: false
+
+    # Redirección automática HTTP -> HTTPS
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SSL_REDIRECT
+    redirect: "443"
+
+    # ARN del certificado SSL en AWS Certificate Manager
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SSL_CERTIFICATE_ARN
+    # Ejemplo: arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012
+    certificateArn: ""
+
+    # Política SSL/TLS
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SSL_POLICY
+    # Ejemplo: ELBSecurityPolicy-TLS13-1-2-2021-06
+    policy: ""
+
+    # Hosts con certificados TLS
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* (estructura compleja)
+    # Cada host puede tener su propio certificado
+    hosts:
+      - host: "*.example.com"           # Wildcard certificate
+        secretName: ""                  # Opcional: Secret con certificado custom
+      # - host: "api.example.com"       # Certificado específico
+      #   secretName: "api-tls-secret"
+
+  # =====================================================
+  # CONFIGURACIÓN mTLS (MUTUAL TLS)
+  # =====================================================
+  mtls:
+    # Habilitar mTLS (autenticación mutua)
+    # ⚠️ OVERRIDE - Se habilita/deshabilita desde .env.* con MTLS_ENABLED
+    # IMPORTANTE: Requiere configuración adicional en AWS (Cognito o OIDC)
+    enabled: false
+
+    # Configuración de autenticación mutua (mTLS)
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con MTLS_MUTUAL_AUTHENTICATION
+    # Ejemplo: [{"port": 443, "mode": "verify", "trustStore": "arn:aws:...", "ignoreClientCertificateExpiry": false}]
+    mutualAuthentication: []
+
+  # =====================================================
+  # CONFIGURACIÓN WAF (WEB APPLICATION FIREWALL)
+  # =====================================================
+  waf:
+    # Habilitar AWS WAF v2
+    # ⚠️ OVERRIDE - Se habilita/deshabilita desde .env.* con WAF_ENABLED
+    enabled: false
+
+    # ARN del Web ACL de WAF v2
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con WAF_ACL_ARN
+    # Ejemplo: arn:aws:wafv2:us-west-2:123456789012:regional/webacl/ExampleWebACL/473e64fd-f30b-4765-81a0-62ad96dd167a
+    aclArn: ""
+
+  # =====================================================
+  # ANNOTATIONS AWS LOAD BALANCER CONTROLLER
+  # =====================================================
+  annotations:
+    # Puertos de escucha del ALB
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_LISTEN_PORTS
+    # HTTP + HTTPS por defecto
+    awsListenPorts: '[{"HTTP":80},{"HTTPS":443}]'
+
+    # Tipo de target (ip o instance)
+    # ✅ FIJO - "ip" es más eficiente para la mayoría de casos
+    awsTargetType: "ip"
+
+    # Protocolo del backend
+    # ✅ FIJO - "HTTP" para la mayoría de aplicaciones
+    awsBackendProtocol: "HTTP"
+
+    # Códigos de éxito para health checks
+    # ✅ FIJO - "200" es estándar
+    awsSuccessCodes: "200"
+
+    # Path para health checks
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_HEALTHCHECK_PATH
+    awsHealthcheckPath: "/health"
+
+    # Nombre personalizado del Load Balancer
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_LOAD_BALANCER_NAME
+    awsLoadBalancerName: ""
+
+    # Esquema del ALB (internet-facing o internal)
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_SCHEME
+    # internet-facing: Accesible desde Internet
+    # internal: Solo accesible desde VPC
+    awsScheme: "internet-facing"
+
+    # Subnets donde crear el ALB
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_SUBNETS
+    # Ejemplo: subnet-12345,subnet-67890
+    awsSubnets: ""
+
+    # Security Groups del ALB
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_SECURITY_GROUPS
+    # Ejemplo: sg-12345,sg-67890
+    awsSecurityGroups: ""
+
+    # Custom annotations adicionales
+    # ✅ FIJO - Se pueden agregar annotations personalizadas
+    custom: {}
+      # Ejemplo:
+      # alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=60
+      # alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=30
+
+  # =====================================================
+  # DEFAULT BACKEND (CATCH-ALL SERVICE)
+  # =====================================================
+  defaultBackend:
+    # Habilitar default backend automático
+    # ⚠️ OVERRIDE - Se habilita/deshabilita desde .env.* con DEFAULT_BACKEND_ENABLED
+    enabled: true
+
+    # Nombre del default backend
+    # ✅ FIJO - Nombre del deployment y service
+    name: "default-backend"
+
+    # Número de réplicas
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con DEFAULT_BACKEND_REPLICAS
+    replicaCount: 2
+
+    # Configuración de la imagen
+    image:
+      registry: "registry.k8s.io"
+      repository: "defaultbackend-amd64"
+      tag: "1.5"
+      pullPolicy: "IfNotPresent"
+
+    # Configuración del contenedor
+    container:
+      port: 8080
+      livenessProbe:
+        path: "/healthz"
+        initialDelaySeconds: 30
+        periodSeconds: 10
+      readinessProbe:
+        path: "/healthz"
+        initialDelaySeconds: 5
+        periodSeconds: 5
+
+    # Configuración del servicio
+    service:
+      port: 80
+
+    # Recursos del contenedor
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
+
+# =====================================================
+# EJEMPLO DE USO EN OTROS INGRESS
+# =====================================================
+# Para que otros Ingress usen este ALB master, deben tener:
+#
+# ingress:
+#   enabled: true
+#   className: "alb"
+#   group:
+#     enabled: true
+#   annotations:
+#     awsGroupName: "main-alb-group"  # ← MISMO que albMaster.groupName
+#   rules:
+#     - host: "api.example.com"       # ← Host específico
+#       paths:
+#         - path: "/api"
+#           pathType: "Prefix"
+#           servicePort: 80
+#
+# RESULTADO: El ALB master tendrá múltiples reglas:
+# - *.example.com/* → default-backend (catch-all del master)
+# - api.example.com/api/* → api-service (del otro Ingress)
+# - app.example.com/* → app-service (de otro Ingress más)

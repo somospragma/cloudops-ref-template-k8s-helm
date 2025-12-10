@@ -1,0 +1,14 @@
+apiVersion: v2
+name: alb-master
+description: ALB Master - Shared Application Load Balancer for multiple Ingress
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - aws
+  - alb
+  - ingress
+  - load-balancer
+  - kubernetes
+maintainers:
+  - name: DevOps-CloudOps Pragma Team
