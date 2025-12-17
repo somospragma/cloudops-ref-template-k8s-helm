@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.appName }}-deployment
+  name: {{ .Values.appName }}-deploy
   namespace: {{ .Values.namespace }}
   labels:
     app: {{ .Values.appName }}
@@ -83,7 +83,7 @@ spec:
       volumes:
       - name: config-volume
         configMap:
-          name: {{ .Values.appName }}-config
+          name: {{ .Values.appName }}-cm
           items:
           - key: application.yaml
             path: application.yaml
