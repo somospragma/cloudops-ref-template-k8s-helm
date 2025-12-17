@@ -47,8 +47,10 @@ albMaster:
     enabled: false
 
     # Redirección automática HTTP -> HTTPS
-    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SSL_REDIRECT
-    redirect: "443"
+    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SSL_REDIRECT_ENABLED y SSL_REDIRECT_PORT
+    redirect:
+      enabled: false
+      port: "443"
 
     # ARN del certificado SSL en AWS Certificate Manager
     # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SSL_CERTIFICATE_ARN
@@ -103,7 +105,7 @@ albMaster:
     # Puertos de escucha del ALB
     # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_LISTEN_PORTS
     # HTTP + HTTPS por defecto
-    awsListenPorts: '[{"HTTP":80},{"HTTPS":443}]'
+    awsListenPorts: '[{"HTTP":80},{"HTTP":8443}]'
 
     # Tipo de target (ip o instance)
     # ✅ FIJO - "ip" es más eficiente para la mayoría de casos
@@ -119,7 +121,7 @@ albMaster:
 
     # Path para health checks
     # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_HEALTHCHECK_PATH
-    awsHealthcheckPath: "/health"
+    awsHealthcheckPath: "/"
 
     # Nombre personalizado del Load Balancer
     # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_LOAD_BALANCER_NAME
@@ -129,7 +131,7 @@ albMaster:
     # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_SCHEME
     # internet-facing: Accesible desde Internet
     # internal: Solo accesible desde VPC
-    awsScheme: "internet-facing"
+    awsScheme: "internal"
 
     # Subnets donde crear el ALB
     # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con ALB_SUBNETS
@@ -166,20 +168,20 @@ albMaster:
 
     # Configuración de la imagen
     image:
-      registry: "registry.k8s.io"
-      repository: "defaultbackend-amd64"
-      tag: "1.5"
+      registry: "docker.io"
+      repository: "httpd"
+      tag: "2.4.66"
       pullPolicy: "IfNotPresent"
 
     # Configuración del contenedor
     container:
-      port: 8080
+      port: 80
       livenessProbe:
-        path: "/healthz"
+        path: "/"
         initialDelaySeconds: 30
         periodSeconds: 10
       readinessProbe:
-        path: "/healthz"
+        path: "/"
         initialDelaySeconds: 5
         periodSeconds: 5
 

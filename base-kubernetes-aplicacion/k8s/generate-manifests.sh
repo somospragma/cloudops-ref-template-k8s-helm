@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =====================================================
-# ALB MASTER MANIFEST GENERATOR
+# KUBERNETES APPLICATION MANIFEST GENERATOR
 # =====================================================
 # Script para generar manifiestos YAML sin aplicarlos
 # Uso: ./generate-manifests.sh <ambiente> [output-dir]
@@ -37,7 +37,7 @@ fi
 
 ENVIRONMENT=$1
 OUTPUT_DIR=${2:-"./manifests-${ENVIRONMENT}"}
-ENV_FILE=".env.${ENVIRONMENT}"
+ENV_FILE="../.env.${ENVIRONMENT}"
 
 # Validar archivo de ambiente
 if [ ! -f "$ENV_FILE" ]; then
@@ -63,73 +63,95 @@ cat > "$HELM_VALUES_FILE" << EOF
 # Valores generados para ambiente: ${ENVIRONMENT}
 # Generado el: $(date)
 
-environment: ${ENVIRONMENT}
+appName: microservicio-app
 namespace: ${NAMESPACE}
+environment: ${ENVIRONMENT}
 
-albMaster:
-  enabled: ${ALB_MASTER_ENABLED}
-  groupName: "${ALB_GROUP_NAME}"
-  
-  ssl:
-    enabled: ${SSL_ENABLED}
-    redirect:
-      enabled: ${SSL_REDIRECT_ENABLED}
-      port: "${SSL_REDIRECT_PORT}"
-    certificateArn: "${SSL_CERTIFICATE_ARN}"
-    policy: "${SSL_POLICY}"
-  
-  mtls:
-    enabled: ${MTLS_ENABLED}
-    mutualAuthentication: '${MTLS_MUTUAL_AUTHENTICATION}'
-  
-  waf:
-    enabled: ${WAF_ENABLED}
-    aclArn: "${WAF_ACL_ARN}"
-  
+image:
+  registry: ${IMAGE_REGISTRY}
+  repository: ${IMAGE_REPOSITORY}
+  tag: "${IMAGE_TAG}"
+
+replicaCount: ${REPLICA_COUNT}
+
+resources:
+  requests:
+    memory: "${MEMORY_REQUEST}"
+    cpu: "${CPU_REQUEST}"
+  limits:
+    memory: "${MEMORY_LIMIT}"
+    cpu: "${CPU_LIMIT}"
+
+service:
+  port: ${SERVICE_PORT}
+
+configMap:
+  enabled: ${CONFIGMAP_ENABLED}
+
+ingress:
+  enabled: ${INGRESS_ENABLED}
+  className: ${INGRESS_CLASS_NAME}
+  group:
+    enabled: ${INGRESS_GROUP_ENABLED}
+  rules:
+    - host: "${INGRESS_HOST:-}"
+      paths:
+        - path: ${INGRESS_PATH}
+          pathType: Prefix
+          servicePort: ${SERVICE_PORT}
   annotations:
-    awsLoadBalancerName: "${ALB_LOAD_BALANCER_NAME}"
-    awsListenPorts: '${ALB_LISTEN_PORTS}'
-    awsHealthcheckPath: "${ALB_HEALTHCHECK_PATH}"
-    awsScheme: "${ALB_SCHEME}"
-    awsSubnets: "${ALB_SUBNETS}"
-    awsSecurityGroups: "${ALB_SECURITY_GROUPS}"
-  
-  defaultBackend:
-    enabled: ${DEFAULT_BACKEND_ENABLED}
-    replicaCount: ${DEFAULT_BACKEND_REPLICAS}
+    rewriteTarget: "${INGRESS_REWRITE_TARGET}"
+    awsHealthcheckPath: "${INGRESS_HEALTHCHECK_PATH}"
+    awsGroupName: "${INGRESS_GROUP_NAME}"
+    awsListenPorts: '${INGRESS_LISTEN_PORTS}'
+    custom: {}
+  tls:
+    enabled: ${INGRESS_TLS_ENABLED}
+    hosts: 
+      - "${INGRESS_TLS_HOSTS}"
+    secretName: "${INGRESS_TLS_SECRET_NAME}"
+  mtls:
+    enabled: ${INGRESS_MTLS_ENABLED}
+    secretName: "${INGRESS_MTLS_SECRET_NAME}"
+    verifyClient: "${INGRESS_MTLS_VERIFY_CLIENT}"
+
+hpa:
+  enabled: ${HPA_ENABLED}
+  minReplicas: ${HPA_MIN_REPLICAS}
+  maxReplicas: ${HPA_MAX_REPLICAS}
+  targetCPUUtilizationPercentage: ${HPA_TARGET_CPU}
+  targetMemoryUtilizationPercentage: ${HPA_TARGET_MEMORY}
+
+serviceAccount:
+  enabled: ${SERVICEACCOUNT_ENABLED}
+  annotations:
+    irsaRoleArn: "${SERVICEACCOUNT_IRSA_ROLE_ARN}"
+    azureClientId: "${SERVICEACCOUNT_AZURE_CLIENT_ID}"
+
+pdb:
+  enabled: ${PDB_ENABLED}
+  minAvailable: ${PDB_MIN_AVAILABLE}
+  maxUnavailable: "${PDB_MAX_UNAVAILABLE}"
 EOF
 
 # Generar manifiestos con Helm template
-RELEASE_NAME="alb-master-${ENVIRONMENT}"
-MANIFEST_FILE="${OUTPUT_DIR}/alb-master-${ENVIRONMENT}.yaml"
+RELEASE_NAME="microservicio-app-${ENVIRONMENT}"
+MANIFEST_FILE="${OUTPUT_DIR}/microservicio-app-${ENVIRONMENT}.yaml"
 
 log "Generando manifiestos YAML: $MANIFEST_FILE"
 
-# Generar namespace primero
-cat > "$MANIFEST_FILE" << EOF
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${NAMESPACE}
-  labels:
-    name: ${NAMESPACE}
-    env: ${ENVIRONMENT}
-    type: alb-master
-EOF
-
-# Agregar manifiestos de Helm al mismo archivo
 helm template "$RELEASE_NAME" . \
     --namespace "$NAMESPACE" \
     --values values.yaml \
     --values "$HELM_VALUES_FILE" \
-    >> "$MANIFEST_FILE"
+    > "$MANIFEST_FILE"
 
 # Generar archivo de información
 INFO_FILE="${OUTPUT_DIR}/deployment-info.txt"
 
 cat > "$INFO_FILE" << EOF
-ALB MASTER - INFORMACIÓN DE DESPLIEGUE
-=====================================
+MICROSERVICIO APP - INFORMACIÓN DE DESPLIEGUE
+============================================
 
 Ambiente: ${ENVIRONMENT}
 Generado: $(date)
@@ -137,17 +159,18 @@ Release: ${RELEASE_NAME}
 Namespace: ${NAMESPACE}
 
 CONFIGURACIÓN:
-- ALB Habilitado: ${ALB_MASTER_ENABLED}
-- Grupo ALB: ${ALB_GROUP_NAME}
-- Nombre ALB: ${ALB_LOAD_BALANCER_NAME}
-- Esquema: ${ALB_SCHEME}
-- SSL Habilitado: ${SSL_ENABLED}
-- mTLS Habilitado: ${MTLS_ENABLED}
-- WAF Habilitado: ${WAF_ENABLED}
+- Imagen: ${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}:${IMAGE_TAG}
+- Réplicas: ${REPLICA_COUNT}
+- Recursos: ${CPU_REQUEST}/${CPU_LIMIT} CPU, ${MEMORY_REQUEST}/${MEMORY_LIMIT} Memory
+- ConfigMap: ${CONFIGMAP_ENABLED}
+- Ingress: ${INGRESS_ENABLED}
+- HPA: ${HPA_ENABLED}
+- ServiceAccount: ${SERVICEACCOUNT_ENABLED}
+- PDB: ${PDB_ENABLED}
 
 ARCHIVOS GENERADOS:
 - values-override-${ENVIRONMENT}.yaml (valores Helm)
-- alb-master-${ENVIRONMENT}.yaml (manifiestos K8s con namespace)
+- microservicio-app-${ENVIRONMENT}.yaml (manifiestos K8s)
 - deployment-info.txt (esta información)
 
 COMANDOS PARA APLICAR:
