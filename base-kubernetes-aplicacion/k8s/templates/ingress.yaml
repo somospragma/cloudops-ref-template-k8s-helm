@@ -15,10 +15,10 @@ metadata:
     {{- end }}
 
     {{- if eq .Values.ingress.className "alb" }}
-    alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.annotations.awsTargetType | default "ip" }}
-    alb.ingress.kubernetes.io/backend-protocol: {{ .Values.ingress.annotations.awsBackendProtocol | default "HTTP" }}
-    alb.ingress.kubernetes.io/success-codes: {{ .Values.ingress.annotations.awsSuccessCodes | default "200" }}
-    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.annotations.awsHealthcheckPath | default "/actuator/health" }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.annotations.awsTargetType | default "ip" | quote }}
+    alb.ingress.kubernetes.io/backend-protocol: {{ .Values.ingress.annotations.awsBackendProtocol | default "HTTP" | quote }}
+    alb.ingress.kubernetes.io/success-codes: {{ .Values.ingress.annotations.awsSuccessCodes | default "200" | quote }}
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.annotations.awsHealthcheckPath | default "/actuator/health" | quote }}
     {{- end }}
 
     # Custom annotations adicionales
@@ -40,7 +40,7 @@ spec:
           pathType: {{ .pathType }}
           backend:
             service:
-              name: {{ $.Values.appName }}-service
+              name: {{ $.Values.appName }}-svc
               port:
                 number: {{ .servicePort }}
         {{- end }}
