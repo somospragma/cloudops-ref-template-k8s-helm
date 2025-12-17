@@ -1,0 +1,12 @@
+# Patterns to ignore when building packages.
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+.DS_Store
+.git/
+.gitignore
+README.md
+values-pipeline.yaml
+generate-values.sh

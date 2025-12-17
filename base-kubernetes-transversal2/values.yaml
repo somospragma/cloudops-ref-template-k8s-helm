@@ -1,0 +1,209 @@
+# =====================================================
+# EKS CONTROLLERS - DEFAULT VALUES
+# =====================================================
+# This file contains default values for the EKS Controllers Helm chart.
+# Override these values in environment-specific values files.
+
+# Global configuration
+global:
+  clusterName: "mi-cluster"
+  awsRegion: "us-east-1"
+  awsAccountId: "123456789012"
+
+# =====================================================
+# KARPENTER - NODECLASS CONFIGURATION
+# =====================================================
+nodeclass:
+  # Enable/disable NodeClass creation
+  enabled: false
+  
+  # Custom name override (optional)
+  nameOverride: ""
+  
+  # IAM role for EC2 instances (required when enabled)
+  role: ""
+  
+  # Subnet selection for nodes (required when enabled)
+  subnetSelectorTerms: []
+  # Example:
+  # - id: "subnet-0123456789abcdef0"
+  # - tags:
+  #     Name: "private-subnet"
+  #     kubernetes.io/role/internal-elb: "1"
+  
+  # Security group selection for nodes (required when enabled)
+  securityGroupSelectorTerms: []
+  # Example:
+  # - id: "sg-0123456789abcdef0"
+  # - tags:
+  #     Name: "eks-cluster-sg"
+  
+  # Ephemeral storage configuration (optional)
+  ephemeralStorage:
+    size: "80Gi"
+    iops: 3000
+    throughput: 125
+    kmsKeyID: ""
+  
+  # SNAT policy configuration (optional)
+  snatPolicy: "Random"  # Random | Disabled
+  
+  # Network policy configuration (optional)
+  networkPolicy: "DefaultAllow"  # DefaultAllow | DefaultDeny
+  
+  # Network policy event logs (optional)
+  networkPolicyEventLogs: "Disabled"  # Enabled | Disabled
+  
+  # Additional EC2 tags (optional)
+  tags: {}
+  # Example:
+  # Environment: "production"
+  # Team: "platform"
+  
+  # Additional labels and annotations
+  labels: {}
+  annotations: {}
+
+# =====================================================
+# KARPENTER - NODEPOOL CONFIGURATION
+# =====================================================
+nodepool:
+  # Enable/disable NodePool creation
+  enabled: false
+  
+  # Custom name override (optional)
+  nameOverride: ""
+  
+  # NodeClass reference
+  nodeClassRef:
+    group: "eks.amazonaws.com"
+    kind: "NodeClass"
+    name: ""  # Will default to the NodeClass created by this chart
+  
+  # Node template configuration
+  template:
+    labels: {}
+    annotations: {}
+  
+  # Node requirements (optional but recommended)
+  requirements: []
+  # Example:
+  # - key: "eks.amazonaws.com/instance-category"
+  #   operator: In
+  #   values: ["c", "m", "r"]
+  # - key: "karpenter.sh/capacity-type"
+  #   operator: In
+  #   values: ["on-demand", "spot"]
+  
+  # Node taints (optional)
+  taints: []
+  # Example:
+  # - key: "example.com/special-workload"
+  #   value: "true"
+  #   effect: "NoSchedule"
+  
+  # Startup taints (optional)
+  startupTaints: []
+  
+  # Expiration and termination
+  expireAfter: ""  # Example: "72h"
+  terminationGracePeriod: ""  # Example: "1h"
+  
+  # Disruption configuration (optional)
+  disruption:
+    consolidationPolicy: "WhenEmptyOrUnderutilized"
+    consolidateAfter: "60s"
+    budgets: []
+    # Example:
+    # - nodes: "20%"
+    #   schedule: "0 9 * * mon-fri"
+    #   duration: "8h"
+  
+  # Resource limits (optional but recommended)
+  limits:
+    cpu: "1000"
+    memory: "1000Gi"
+  
+  # Weight for scheduling priority (optional)
+  weight: 100
+  
+  # Additional labels and annotations
+  labels: {}
+  annotations: {}
+
+
+
+# =====================================================
+# AWS LOAD BALANCER CONTROLLER
+# =====================================================
+aws-load-balancer-controller:
+  enabled: true
+  clusterName: "{{ .Values.global.clusterName }}"
+  region: "{{ .Values.global.awsRegion }}"
+  
+  # Service account (creado por el subchart)
+  serviceAccount:
+    create: true
+    name: aws-load-balancer-controller
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::{{ .Values.global.awsAccountId }}:role/tu-lb-controller-role"
+  
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 200m
+      memory: 500Mi
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  
+  # Solo ejecutar en managed node groups, NO en nodos Karpenter
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: karpenter.sh/nodepool
+            operator: DoesNotExist
+
+# =====================================================
+# CLUSTER AUTOSCALER
+# =====================================================
+cluster-autoscaler:
+  enabled: true
+  autoDiscovery:
+    clusterName: "{{ .Values.global.clusterName }}"
+  
+  awsRegion: "{{ .Values.global.awsRegion }}"
+  
+  # Service account (creado por el subchart)
+  rbac:
+    serviceAccount:
+      create: true
+      name: cluster-autoscaler
+      annotations:
+        eks.amazonaws.com/role-arn: "arn:aws:iam::{{ .Values.global.awsAccountId }}:role/tu-cluster-autoscaler-role"
+  
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 100m
+      memory: 300Mi
+    requests:
+      cpu: 100m
+      memory: 300Mi
+  
+  # Solo ejecutar en managed node groups, NO en nodos Karpenter
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: karpenter.sh/nodepool
+            operator: DoesNotExist
+  
+  extraArgs:
+    skip-nodes-with-local-storage: false
+    expander: least-waste
+    balance-similar-node-groups: true
+    skip-nodes-with-system-pods: false
