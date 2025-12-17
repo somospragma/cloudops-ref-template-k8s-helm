@@ -31,22 +31,20 @@ Este chart despliega los siguientes componentes:
 ```
 eks-controllers/
 ├── Chart.yaml                          # Metadatos del chart
-├── values.yaml                         # Valores por defecto
-├── values-dev.yaml                     # Valores para desarrollo (generado)
-├── values-prod.yaml                    # Valores para producción (generado)
-├── values-karpenter-example.yaml       # Ejemplo de configuración Karpenter
+├── values.yaml                         # Template de valores base
+├── .env.ficohsa                        # Variables con placeholders
 ├── deployment.sh                       # Script de deployment automatizado
-├── .env.dev                            # Variables de desarrollo
-├── .env.prod                           # Variables de producción
 ├── templates/
 │   ├── nodeclass.yaml                  # Template de NodeClass
 │   ├── nodepool.yaml                   # Template de NodePool
 │   ├── NOTES.txt                       # Notas post-instalación
 │   └── _helpers.tpl                    # Funciones helper
 ├── charts/                             # Dependencias (auto-descargadas)
-├── NODECLASS-DOCUMENTATION.md          # Documentación NodeClass
-├── NODEPOOL-DOCUMENTATION.md           # Documentación NodePool
 └── README.md                           # Este archivo
+
+# Archivos generados al ejecutar deployment:
+├── values-{nombre}.yaml                # Valores generados con variables sustituidas
+└── manifests-{nombre}/                 # Manifiestos YAML renderizados
 ```
 
 ## 📋 Prerequisitos
@@ -90,825 +88,216 @@ kubectl get pods -n karpenter
 kubectl get crd | grep karpenter
 ```
 
-### Permisos AWS
-- Acceso al cluster EKS
-- Permisos para crear/modificar recursos IAM
-- Acceso a VPC, subnets y security groups
+## 🔧 Configuración
 
-### IAM Roles Requeridos
-
-#### Para EKS Cluster (Control Plane)
-
-**Políticas AWS Managed Requeridas:**
-
-**Para EKS Standard:**
-- `AmazonEKSClusterPolicy`
-
-**Para EKS Auto Mode (adicionales):**
-- `AmazonEKSClusterPolicy`
-- `AmazonEKSComputePolicy`
-- `AmazonEKSBlockStoragePolicy`
-- `AmazonEKSLoadBalancingPolicy`
-- `AmazonEKSNetworkingPolicy`
-
-**Trust Policy:**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
-      "Action": [
-        "sts:AssumeRole",
-        "sts:TagSession"
-      ]
-    }
-  ]
-}
-```
-
-**Crear rol para EKS Standard:**
-```bash
-aws iam create-role \
-  --role-name AmazonEKSClusterRole \
-  --assume-role-policy-document file://cluster-trust-policy.json
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSClusterRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
-```
-
-**Crear rol para EKS Auto Mode:**
-```bash
-aws iam create-role \
-  --role-name AmazonEKSAutoClusterRole \
-  --assume-role-policy-document file://cluster-trust-policy.json
-
-# Adjuntar todas las políticas AWS managed para Auto Mode
-aws iam attach-role-policy \
-  --role-name AmazonEKSAutoClusterRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSAutoClusterRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSComputePolicy
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSAutoClusterRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicy
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSAutoClusterRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSAutoClusterRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy
-
-# IMPORTANTE: Agregar política adicional para Launch Templates (requerida para Karpenter)
-aws iam put-role-policy \
-  --role-name AmazonEKSAutoClusterRole \
-  --policy-name EKSAutoModeLaunchTemplatePolicy \
-  --policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Effect": "Allow",
-        "Action": [
-          "ec2:CreateLaunchTemplate",
-          "ec2:CreateLaunchTemplateVersion",
-          "ec2:DescribeLaunchTemplates",
-          "ec2:DescribeLaunchTemplateVersions",
-          "ec2:DeleteLaunchTemplate",
-          "ec2:CreateFleet",
-          "ec2:RunInstances"
-        ],
-        "Resource": "*"
-      }
-    ]
-  }'
-```
-
-> **⚠️ Nota Importante:** Las políticas AWS managed para EKS Auto Mode **no incluyen** todos los permisos necesarios para Karpenter. Es **obligatorio** agregar la política adicional `EKSAutoModeLaunchTemplatePolicy` para que el NodeClass funcione correctamente.
-
-#### Para EKS Worker Nodes (Managed Node Groups)
-
-**Políticas AWS Managed Requeridas:**
-- `AmazonEKSWorkerNodePolicy`
-- `AmazonEKS_CNI_Policy`
-- `AmazonEC2ContainerRegistryReadOnly`
-
-**Trust Policy:**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
-
-**Crear rol:**
-```bash
-aws iam create-role \
-  --role-name AmazonEKSNodeRole \
-  --assume-role-policy-document file://node-trust-policy.json
-
-# Adjuntar políticas
-aws iam attach-role-policy \
-  --role-name AmazonEKSNodeRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSNodeRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSNodeRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-```
-
-#### Para AWS Load Balancer Controller
-
-**Política IAM Requerida:** `AWSLoadBalancerControllerIAMPolicy`
-
-**Crear archivo de política (iam-policy.json):**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateServiceLinkedRole",
-        "ec2:DescribeAccountAttributes",
-        "ec2:DescribeAddresses",
-        "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeInternetGateways",
-        "ec2:DescribeVpcs",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeSecurityGroups",
-        "ec2:DescribeInstances",
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DescribeTags",
-        "ec2:GetCoipPoolUsage",
-        "ec2:DescribeCoipPools",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeLoadBalancerAttributes",
-        "elasticloadbalancing:DescribeListeners",
-        "elasticloadbalancing:DescribeListenerCertificates",
-        "elasticloadbalancing:DescribeSSLPolicies",
-        "elasticloadbalancing:DescribeRules",
-        "elasticloadbalancing:DescribeTargetGroups",
-        "elasticloadbalancing:DescribeTargetGroupAttributes",
-        "elasticloadbalancing:DescribeTargetHealth",
-        "elasticloadbalancing:DescribeTags"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cognito-idp:DescribeUserPoolClient",
-        "acm:ListCertificates",
-        "acm:DescribeCertificate",
-        "iam:ListServerCertificates",
-        "iam:GetServerCertificate",
-        "waf-regional:GetWebACL",
-        "waf-regional:GetWebACLForResource",
-        "waf-regional:AssociateWebACL",
-        "waf-regional:DisassociateWebACL",
-        "wafv2:GetWebACL",
-        "wafv2:GetWebACLForResource",
-        "wafv2:AssociateWebACL",
-        "wafv2:DisassociateWebACL",
-        "shield:GetSubscriptionState",
-        "shield:DescribeProtection",
-        "shield:CreateProtection",
-        "shield:DeleteProtection"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:AuthorizeSecurityGroupIngress",
-        "ec2:RevokeSecurityGroupIngress"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:CreateSecurityGroup"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:CreateTags"
-      ],
-      "Resource": "arn:aws:ec2:*:*:security-group/*",
-      "Condition": {
-        "StringEquals": {
-          "ec2:CreateAction": "CreateSecurityGroup"
-        },
-        "Null": {
-          "aws:RequestTag/elbv2.k8s.aws/cluster": "false"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:CreateTags",
-        "ec2:DeleteTags"
-      ],
-      "Resource": "arn:aws:ec2:*:*:security-group/*",
-      "Condition": {
-        "Null": {
-          "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
-          "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ec2:AuthorizeSecurityGroupIngress",
-        "ec2:RevokeSecurityGroupIngress",
-        "ec2:DeleteSecurityGroup"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "Null": {
-          "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:CreateLoadBalancer",
-        "elasticloadbalancing:CreateTargetGroup"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "Null": {
-          "aws:RequestTag/elbv2.k8s.aws/cluster": "false"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:CreateListener",
-        "elasticloadbalancing:DeleteListener",
-        "elasticloadbalancing:CreateRule",
-        "elasticloadbalancing:DeleteRule"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:AddTags",
-        "elasticloadbalancing:RemoveTags"
-      ],
-      "Resource": [
-        "arn:aws:elasticloadbalancing:*:*:targetgroup/*/*",
-        "arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*",
-        "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"
-      ],
-      "Condition": {
-        "Null": {
-          "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
-          "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:AddTags",
-        "elasticloadbalancing:RemoveTags"
-      ],
-      "Resource": [
-        "arn:aws:elasticloadbalancing:*:*:listener/net/*/*/*",
-        "arn:aws:elasticloadbalancing:*:*:listener/app/*/*/*",
-        "arn:aws:elasticloadbalancing:*:*:listener-rule/net/*/*/*",
-        "arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:ModifyLoadBalancerAttributes",
-        "elasticloadbalancing:SetIpAddressType",
-        "elasticloadbalancing:SetSecurityGroups",
-        "elasticloadbalancing:SetSubnets",
-        "elasticloadbalancing:DeleteLoadBalancer",
-        "elasticloadbalancing:ModifyTargetGroup",
-        "elasticloadbalancing:ModifyTargetGroupAttributes",
-        "elasticloadbalancing:DeleteTargetGroup"
-      ],
-      "Resource": "*",
-      "Condition": {
-        "Null": {
-          "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
-        }
-      }
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:RegisterTargets",
-        "elasticloadbalancing:DeregisterTargets"
-      ],
-      "Resource": "arn:aws:elasticloadbalancing:*:*:targetgroup/*/*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "elasticloadbalancing:SetWebAcl",
-        "elasticloadbalancing:ModifyListener",
-        "elasticloadbalancing:AddListenerCertificates",
-        "elasticloadbalancing:RemoveListenerCertificates",
-        "elasticloadbalancing:ModifyRule"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-**Crear política:**
-```bash
-aws iam create-policy \
-  --policy-name AWSLoadBalancerControllerIAMPolicy \
-  --policy-document file://iam-policy.json
-```
-
-**Trust Policy (OIDC):**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::ACCOUNT-ID:oidc-provider/oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:sub": "system:serviceaccount:kube-system:aws-load-balancer-controller",
-          "oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:aud": "sts.amazonaws.com"
-        }
-      }
-    }
-  ]
-}
-```
-
-**Crear rol:**
-```bash
-aws iam create-role \
-  --role-name AmazonEKSLoadBalancerControllerRole \
-  --assume-role-policy-document file://trust-policy.json
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSLoadBalancerControllerRole \
-  --policy-arn arn:aws:iam::ACCOUNT-ID:policy/AWSLoadBalancerControllerIAMPolicy
-```
-
-#### Para Cluster Autoscaler
-
-**Política IAM Requerida:**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:DescribeAutoScalingInstances",
-        "autoscaling:DescribeLaunchConfigurations",
-        "autoscaling:DescribeTags",
-        "autoscaling:SetDesiredCapacity",
-        "autoscaling:TerminateInstanceInAutoScalingGroup",
-        "ec2:DescribeLaunchTemplateVersions",
-        "ec2:DescribeInstanceTypes"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-**Trust Policy (OIDC):**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::ACCOUNT-ID:oidc-provider/oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:sub": "system:serviceaccount:kube-system:cluster-autoscaler",
-          "oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE:aud": "sts.amazonaws.com"
-        }
-      }
-    }
-  ]
-}
-```
-
-**Crear rol:**
-```bash
-aws iam create-policy \
-  --policy-name AmazonEKSClusterAutoscalerPolicy \
-  --policy-document file://cluster-autoscaler-policy.json
-
-aws iam create-role \
-  --role-name AmazonEKSClusterAutoscalerRole \
-  --assume-role-policy-document file://trust-policy.json
-
-aws iam attach-role-policy \
-  --role-name AmazonEKSClusterAutoscalerRole \
-  --policy-arn arn:aws:iam::ACCOUNT-ID:policy/AmazonEKSClusterAutoscalerPolicy
-```
-
-#### Para Karpenter (EKS Auto Mode)
-
-**Políticas AWS Managed Requeridas:**
-- `AmazonEKSWorkerNodePolicy`
-- `AmazonEKS_CNI_Policy`
-- `AmazonEC2ContainerRegistryReadOnly`
-
-**Trust Policy:**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-```
-
-**Crear rol:**
-```bash
-aws iam create-role \
-  --role-name Banco-Ficohsa-Iam-Role-AUTO-MODE \
-  --assume-role-policy-document file://trust-policy.json
-
-# Adjuntar políticas
-aws iam attach-role-policy \
-  --role-name Banco-Ficohsa-Iam-Role-AUTO-MODE \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
-
-aws iam attach-role-policy \
-  --role-name Banco-Ficohsa-Iam-Role-AUTO-MODE \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
-
-aws iam attach-role-policy \
-  --role-name Banco-Ficohsa-Iam-Role-AUTO-MODE \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-```
-
-### Configuración OIDC Provider
-
-Para usar IAM Roles for Service Accounts (IRSA):
+### 1. Configurar Variables
+Edita el archivo `.env.ficohsa` con los valores específicos de tu cluster:
 
 ```bash
-eksctl utils associate-iam-oidc-provider \
-  --region us-east-1 \
-  --cluster your-cluster-name \
-  --approve
-```
-
-## 🛠 Instalación
-
-### 1. Clonar el Repositorio
-```bash
-git clone <repository-url>
-cd eks-controllers
-```
-
-### 2. Configurar Variables de Ambiente
-Edita el archivo `.env.dev` o `.env.prod` según tu ambiente:
-
-```bash
-# Ejemplo para desarrollo
-cp .env.dev .env.dev.local
-vim .env.dev.local
-```
-
-### 3. Deployment Automatizado
-```bash
-# Para desarrollo
-./deployment.sh dev
-
-# Para producción
-./deployment.sh prod
-```
-
-### 4. Deployment Manual (Opcional)
-```bash
-# Actualizar dependencias
-helm dependency update
-
-# Instalar
-helm install eks-controllers . -f values-dev.yaml -n kube-system
-```
-
-## ⚙️ Configuración
-
-### Configuración por Ambiente
-
-El proyecto soporta múltiples ambientes mediante archivos `.env.*`:
-
-- **`.env.dev`** - Desarrollo
-- **`.env.prod`** - Producción
-
-### Habilitar/Deshabilitar Componentes
-
-En el archivo `.env.*` correspondiente:
-
-```bash
-# AWS Load Balancer Controller
-LB_CONTROLLER_ENABLED=true
-
-# Cluster Autoscaler
-CLUSTER_AUTOSCALER_ENABLED=true
+# Configuración del cluster
+CLUSTER_NAME="${cluster_name}"           # Nombre de tu cluster EKS
+AWS_REGION="${aws_region}"               # Región AWS
+AWS_ACCOUNT_ID="${aws_account_id}"       # ID de cuenta AWS
+VPC_ID="${vpc_id}"                       # VPC ID del cluster
 
 # Karpenter NodeClass
-NODECLASS_ENABLED=true
+NODECLASS_ROLE="${nodeclass_role}"       # IAM Role para nodos
+NODECLASS_SUBNET_IDS="${nodeclass_subnet_ids}"  # Subnets separadas por comas
+NODECLASS_SG_IDS="${nodeclass_sg_ids}"   # Security Groups separados por comas
 
-# Karpenter NodePool
-NODEPOOL_ENABLED=true
+# Load Balancer Controller
+LB_CONTROLLER_ROLE_ARN="${lb_controller_role_arn}"  # IAM Role ARN
+
+# Cluster Autoscaler
+CLUSTER_AUTOSCALER_ROLE_ARN="${cluster_autoscaler_role_arn}"  # IAM Role ARN
 ```
 
-### Configuración de Karpenter
-
-Para configurar Karpenter, edita las variables en `.env.*`:
-
+### 2. Obtener Información del Cluster
 ```bash
-# NodeClass
-NODECLASS_ROLE=Banco-Ficohsa-Iam-Role-AUTO-MODE
-NODECLASS_SUBNET_IDS=subnet-123,subnet-456,subnet-789
-NODECLASS_SG_IDS=sg-123456789
+# Obtener VPC ID
+aws eks describe-cluster --name tu-cluster --query 'cluster.resourcesVpcConfig.vpcId' --output text
 
-# NodePool
-NODEPOOL_INSTANCE_CATEGORIES=c,m,r
-NODEPOOL_CAPACITY_TYPES=spot,on-demand
-NODEPOOL_CPU_LIMIT=1000
-NODEPOOL_MEMORY_LIMIT=1000Gi
+# Obtener Subnets
+aws eks describe-cluster --name tu-cluster --query 'cluster.resourcesVpcConfig.subnetIds' --output text
+
+# Obtener Security Groups
+aws eks describe-cluster --name tu-cluster --query 'cluster.resourcesVpcConfig.securityGroupIds' --output text
 ```
 
 ## 🚀 Uso
 
 ### Deployment Básico
 ```bash
-# Desarrollo
-./deployment.sh dev
-
-# Producción
-./deployment.sh prod
+# Ejecutar deployment completo
+./deployment.sh ficohsa
 ```
 
-### Verificar Deployment
+Este comando:
+1. ✅ Carga las variables del archivo `.env.ficohsa`
+2. ✅ Genera `values-ficohsa.yaml` con valores sustituidos
+3. ✅ Crea `manifests-ficohsa/` con YAMLs renderizados
+4. ✅ Actualiza dependencias de Helm
+5. ✅ Despliega o actualiza el release en Kubernetes
+6. ✅ Verifica el estado del deployment
+
+### Comandos Manuales de Helm
+
+#### Instalación
 ```bash
-# Ver todos los recursos
-kubectl get all -n kube-system
-
-# Ver recursos de Karpenter
-kubectl get nodeclass
-kubectl get nodepool
-kubectl get nodes -l karpenter.sh/nodepool
-
-# Ver logs de controladores
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-cluster-autoscaler
+helm install eks-controllers-ficohsa . \
+  --namespace kube-system \
+  --values values-ficohsa.yaml \
+  --create-namespace
 ```
 
-### Actualizar Configuración
+#### Actualización
 ```bash
-# Editar variables
-vim .env.dev
-
-# Redesplegar
-./deployment.sh dev
+helm upgrade eks-controllers-ficohsa . \
+  --namespace kube-system \
+  --values values-ficohsa.yaml
 ```
 
-### Eliminar Deployment
+#### Desinstalación
 ```bash
-# Eliminar release
-helm uninstall eks-controllers-dev -n kube-system
-
-# Limpiar recursos de Karpenter (si es necesario)
-kubectl delete nodepool --all
-kubectl delete nodeclass --all
+helm uninstall eks-controllers-ficohsa --namespace kube-system
 ```
 
-## 📝 Variables de Ambiente
+## 📊 Variables de Ambiente
 
-### Variables Globales
+### Variables Principales
+
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
-| `CLUSTER_NAME` | Nombre del cluster EKS | `mi-cluster` |
-| `AWS_REGION` | Región de AWS | `us-east-1` |
+| `CLUSTER_NAME` | Nombre del cluster EKS | `mi-cluster-eks` |
+| `AWS_REGION` | Región AWS | `us-east-1` |
 | `AWS_ACCOUNT_ID` | ID de cuenta AWS | `123456789012` |
-| `VPC_ID` | ID de la VPC | `vpc-123456789` |
+| `VPC_ID` | VPC del cluster | `vpc-0123456789abcdef0` |
 
-### AWS Load Balancer Controller
-| Variable | Descripción | Default |
-|----------|-------------|---------|
-| `LB_CONTROLLER_ENABLED` | Habilitar controlador | `true` |
-| `LB_CONTROLLER_REPLICAS` | Número de réplicas | `2` |
-| `LB_CONTROLLER_ROLE_ARN` | ARN del IAM role | - |
+### Variables de Karpenter
 
-### Cluster Autoscaler
-| Variable | Descripción | Default |
-|----------|-------------|---------|
-| `CLUSTER_AUTOSCALER_ENABLED` | Habilitar autoscaler | `false` |
-| `CLUSTER_AUTOSCALER_REPLICAS` | Número de réplicas | `1` |
-| `CA_SCALE_DOWN_ENABLED` | Permitir scale down | `true` |
-
-### Karpenter NodeClass
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
 | `NODECLASS_ENABLED` | Habilitar NodeClass | `true` |
-| `NODECLASS_ROLE` | IAM role para nodos | `eks-node-role` |
+| `NODECLASS_ROLE` | IAM Role para nodos | `KarpenterNodeRole` |
 | `NODECLASS_SUBNET_IDS` | Subnets (separadas por comas) | `subnet-123,subnet-456` |
-| `NODECLASS_SG_IDS` | Security groups | `sg-123456789` |
+| `NODECLASS_SG_IDS` | Security Groups (separados por comas) | `sg-123,sg-456` |
+| `NODEPOOL_ENABLED` | Habilitar NodePool | `true` |
+| `NODEPOOL_CPU_LIMIT` | Límite de CPU | `1000` |
+| `NODEPOOL_MEMORY_LIMIT` | Límite de memoria | `1000Gi` |
 
-### Karpenter NodePool
+### Variables de Load Balancer Controller
+
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
-| `NODEPOOL_ENABLED` | Habilitar NodePool | `true` |
-| `NODEPOOL_INSTANCE_CATEGORIES` | Categorías de instancias | `c,m,r` |
-| `NODEPOOL_CAPACITY_TYPES` | Tipos de capacidad | `spot,on-demand` |
-| `NODEPOOL_CPU_LIMIT` | Límite de CPU | `1000` |
+| `LB_CONTROLLER_ENABLED` | Habilitar controlador | `true` |
+| `LB_CONTROLLER_ROLE_ARN` | IAM Role ARN | `arn:aws:iam::123:role/LBCRole` |
+| `LB_CONTROLLER_REPLICAS` | Número de réplicas | `2` |
+| `LB_CONTROLLER_LOG_LEVEL` | Nivel de logs | `info` |
 
-Ver documentación completa en:
-- [NODECLASS-DOCUMENTATION.md](./NODECLASS-DOCUMENTATION.md)
-- [NODEPOOL-DOCUMENTATION.md](./NODEPOOL-DOCUMENTATION.md)
+### Variables de Cluster Autoscaler
 
-## 🔧 Comandos Útiles
+| Variable | Descripción | Ejemplo |
+|----------|-------------|---------|
+| `CLUSTER_AUTOSCALER_ENABLED` | Habilitar autoscaler | `true` |
+| `CLUSTER_AUTOSCALER_ROLE_ARN` | IAM Role ARN | `arn:aws:iam::123:role/CARole` |
+| `CA_SCALE_DOWN_ENABLED` | Permitir reducir nodos | `true` |
+| `CA_SCALE_DOWN_DELAY_AFTER_ADD` | Delay después de agregar | `1m` |
 
-### Verificación de Estado
+## 🛠️ Comandos Útiles
+
+### Verificar Estado
 ```bash
-# Estado general
-kubectl get pods -n kube-system -o wide
+# Estado del release
+helm status eks-controllers-ficohsa -n kube-system
+
+# Pods de los controladores
+kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+kubectl get pods -n kube-system -l app.kubernetes.io/name=cluster-autoscaler
 
 # Recursos de Karpenter
-kubectl get nodeclass -o wide
-kubectl get nodepool -o wide
-kubectl get nodes -l karpenter.sh/nodepool -o wide
-
-# Describir recursos
-kubectl describe nodeclass <name>
-kubectl describe nodepool <name>
+kubectl get nodeclass
+kubectl get nodepool
 ```
 
-### Logs y Debug
+### Logs
 ```bash
 # Logs del Load Balancer Controller
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller -f
+kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 
 # Logs del Cluster Autoscaler
-kubectl logs -n kube-system -l app.kubernetes.io/name=aws-cluster-autoscaler -f
+kubectl logs -n kube-system -l app.kubernetes.io/name=cluster-autoscaler
 
-# Eventos del cluster
-kubectl get events --sort-by=.metadata.creationTimestamp
+# Logs de Karpenter
+kubectl logs -n karpenter -l app.kubernetes.io/name=karpenter
 ```
 
-### Helm Operations
+### Debugging
 ```bash
-# Ver releases instalados
-helm list -n kube-system
-
-# Ver historial de releases
-helm history eks-controllers-dev -n kube-system
-
-# Rollback
-helm rollback eks-controllers-dev 1 -n kube-system
+# Ver manifiestos generados
+ls -la manifests-ficohsa/
 
 # Ver valores aplicados
-helm get values eks-controllers-dev -n kube-system
+cat values-ficohsa.yaml
+
+# Verificar configuración
+helm get values eks-controllers-ficohsa -n kube-system
 ```
 
-## 🐛 Troubleshooting
+## 🔍 Troubleshooting
 
 ### Problemas Comunes
 
-#### 1. Error de Permisos IAM
-```bash
-# Verificar roles
-aws iam get-role --role-name <role-name>
-aws iam list-attached-role-policies --role-name <role-name>
-```
-
-#### 2. NodeClass/NodePool no se crean o están en Ready: False
+#### 1. Error: "no matches for kind NodeClass"
 ```bash
 # Verificar que Karpenter esté instalado
-kubectl get pods -n karpenter
-
-# Verificar CRDs
 kubectl get crd | grep karpenter
 
-# Describir el NodeClass para ver errores específicos
-kubectl describe nodeclass <name>
-
-# Errores comunes y soluciones:
+# Si no está instalado, instalar Karpenter primero
 ```
 
-**Error: "Role X is unauthorized to join nodes to the cluster"**
-- Verificar que el rol de nodos tenga las políticas: `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`
-- Verificar que el rol esté en los access entries del cluster:
+#### 2. Error: "IAM role not found"
 ```bash
-aws eks list-access-entries --cluster-name <cluster-name>
-aws eks create-access-entry --cluster-name <cluster-name> --principal-arn <role-arn>
+# Verificar que los roles IAM existan
+aws iam get-role --role-name tu-role-name
+
+# Verificar permisos del rol
+aws iam list-attached-role-policies --role-name tu-role-name
 ```
 
-**Error: "Awaiting Instance Profile, Security Group, and Subnet resolution"**
-- Verificar que el rol del cluster tenga la política adicional `EKSAutoModeLaunchTemplatePolicy`
-- Las políticas AWS managed para Auto Mode **no incluyen** todos los permisos necesarios para Karpenter
-
-#### 3. Pods no se programan en nodos Karpenter
+#### 3. Error: "subnet not found"
 ```bash
-# Verificar requirements del NodePool
-kubectl describe nodepool <name>
-
-# Verificar eventos
-kubectl get events --field-selector reason=FailedScheduling
+# Verificar que las subnets existan y sean accesibles
+aws ec2 describe-subnets --subnet-ids subnet-123456789
 ```
 
-#### 4. Controladores no evitan nodos Karpenter
+#### 4. Pods en estado Pending
 ```bash
-# Verificar nodeAffinity
-kubectl get deployment aws-load-balancer-controller -n kube-system -o yaml | grep -A 10 affinity
+# Verificar recursos disponibles
+kubectl describe nodes
+
+# Verificar eventos del cluster
+kubectl get events --sort-by=.metadata.creationTimestamp
 ```
 
-### Logs de Debug
-
-#### Habilitar logs detallados
-En `.env.*`:
+### Logs de Debugging
 ```bash
-# Cluster Autoscaler (más verboso)
-CA_LOG_LEVEL=6
+# Habilitar logs detallados en Load Balancer Controller
+# Cambiar LB_CONTROLLER_LOG_LEVEL=debug en .env.ficohsa
 
-# Load Balancer Controller (más verboso)
-LB_CONTROLLER_LOG_LEVEL=debug
+# Habilitar logs detallados en Cluster Autoscaler  
+# Cambiar CA_LOG_LEVEL=6 en .env.ficohsa
 ```
 
-### Validación de Configuración
-
-#### Verificar sintaxis YAML
-```bash
-# Validar archivo generado
-helm template . -f values-dev.yaml --debug
-```
-
-#### Dry-run
-```bash
-# Simular instalación
-helm install eks-controllers . -f values-dev.yaml -n kube-system --dry-run
-```
-
-## 📚 Referencias
+## 📚 Documentación Adicional
 
 - [AWS Load Balancer Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/)
 - [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler)
-- [Karpenter Documentation](https://karpenter.sh/)
-- [EKS Auto Mode](https://docs.aws.amazon.com/eks/latest/userguide/auto-mode.html)
-- [Helm Documentation](https://helm.sh/docs/)
+- [Karpenter](https://karpenter.sh/)
+- [Helm Charts](https://helm.sh/docs/)
 
 ## 🤝 Contribución
 
-1. Fork el repositorio
+1. Fork el proyecto
 2. Crea una rama para tu feature (`git checkout -b feature/nueva-funcionalidad`)
 3. Commit tus cambios (`git commit -am 'Agregar nueva funcionalidad'`)
 4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
@@ -916,9 +305,8 @@ helm install eks-controllers . -f values-dev.yaml -n kube-system --dry-run
 
 ## 📄 Licencia
 
-Este proyecto está bajo la licencia MIT. Ver el archivo `LICENSE` para más detalles.
+Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
 
 ---
 
-**Desarrollado por:** Equipo de Platform Engineering  
-**Última actualización:** Diciembre 2025
+**Nota**: Este chart está diseñado para ser reutilizable y configurable mediante variables de ambiente, facilitando el deployment en múltiples clusters y ambientes.
