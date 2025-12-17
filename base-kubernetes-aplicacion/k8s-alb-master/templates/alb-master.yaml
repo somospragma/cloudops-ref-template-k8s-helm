@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Values.albMaster.name }}-master-alb
+  name: {{ .Values.albMaster.name }}-ingress-master
   namespace: {{ .Values.namespace }}
   labels:
     app: {{ .Values.albMaster.name }}
@@ -12,11 +12,12 @@ metadata:
     # AWS Load Balancer Controller - Master ALB
     alb.ingress.kubernetes.io/group.name: {{ .Values.albMaster.groupName | quote }}
     alb.ingress.kubernetes.io/listen-ports: {{ .Values.albMaster.annotations.awsListenPorts | quote }}
-    alb.ingress.kubernetes.io/target-type: {{ .Values.albMaster.annotations.awsTargetType | default "ip" }}
-    alb.ingress.kubernetes.io/backend-protocol: {{ .Values.albMaster.annotations.awsBackendProtocol | default "HTTP" }}
-    alb.ingress.kubernetes.io/success-codes: {{ .Values.albMaster.annotations.awsSuccessCodes | default "200" }}
-    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.albMaster.annotations.awsHealthcheckPath | default "/health" }}
-    alb.ingress.kubernetes.io/scheme: {{ .Values.albMaster.annotations.awsScheme | default "internal" }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.albMaster.annotations.awsTargetType | default "ip" | quote }}
+    alb.ingress.kubernetes.io/backend-protocol: {{ .Values.albMaster.annotations.awsBackendProtocol | default "HTTP" | quote }}
+    alb.ingress.kubernetes.io/success-codes: {{ .Values.albMaster.annotations.awsSuccessCodes | default "200" | quote }}
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.albMaster.annotations.awsHealthcheckPath | default "/health" | quote }}
+    alb.ingress.kubernetes.io/scheme: {{ .Values.albMaster.annotations.awsScheme | default "internal" | quote }}
+    alb.ingress.kubernetes.io/group.order: "1"
     
     # Load Balancer Configuration
     {{- if .Values.albMaster.annotations.awsLoadBalancerName }}
@@ -31,7 +32,11 @@ metadata:
     
     # SSL/TLS Configuration
     {{- if .Values.albMaster.ssl.enabled }}
-    alb.ingress.kubernetes.io/ssl-redirect: {{ .Values.albMaster.ssl.redirect | quote }}
+    {{- if .Values.albMaster.ssl.redirect.enabled }}
+    {{- if .Values.albMaster.ssl.redirect.port }}
+    alb.ingress.kubernetes.io/ssl-redirect: {{ .Values.albMaster.ssl.redirect.port | default "443" | quote }}
+    {{- end }}
+    {{- end }}
     {{- if .Values.albMaster.ssl.certificateArn }}
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.albMaster.ssl.certificateArn | quote }}
     {{- end }}
@@ -42,7 +47,8 @@ metadata:
 
     # mTLS Configuration
     {{- if and .Values.albMaster.mtls.enabled .Values.albMaster.mtls.mutualAuthentication }}
-    alb.ingress.kubernetes.io/mutual-authentication: {{ .Values.albMaster.mtls.mutualAuthentication | toJson | quote }}
+    alb.ingress.kubernetes.io/mutual-authentication: |-
+      {{ .Values.albMaster.mtls.mutualAuthentication | nindent 6 }}
     {{- end }}
 
     # WAF Configuration
@@ -69,14 +75,9 @@ spec:
     {{- end }}
   {{- end }}
 
-  rules:
-    - http:
-        paths:
-        - path: {{ .Values.albMaster.defaultPath | default "/" }}
-          pathType: {{ .Values.albMaster.defaultPathType | default "Prefix" }}
-          backend:
-            service:
-              name: {{ .Values.albMaster.defaultService.name }}
-              port:
-                number: {{ .Values.albMaster.defaultService.port }}
+  defaultBackend:
+    service:
+      name: {{ .Values.albMaster.defaultService.name }}-svc
+      port:
+        number: {{ .Values.albMaster.defaultService.port }}
 {{- end }}

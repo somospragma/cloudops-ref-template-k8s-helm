@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.albMaster.defaultBackend.name }}
+  name: {{ .Values.albMaster.defaultBackend.name }}-deploy
   namespace: {{ .Values.namespace }}
   labels:
     app: {{ .Values.albMaster.defaultBackend.name }}
@@ -19,6 +19,13 @@ spec:
         app: {{ .Values.albMaster.defaultBackend.name }}
         env: {{ .Values.environment }}
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: karpenter.sh/nodepool  # Asegura que el nodo no tenga la etiqueta de nodepool de Karpenter, no se despliega en nodos gestionados por Karpenter
+                operator: DoesNotExist
       containers:
       - name: default-backend
         image: {{ .Values.albMaster.defaultBackend.image.registry }}/{{ .Values.albMaster.defaultBackend.image.repository }}:{{ .Values.albMaster.defaultBackend.image.tag }}
@@ -44,7 +51,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.albMaster.defaultBackend.name }}
+  name: {{ .Values.albMaster.defaultBackend.name }}-svc
   namespace: {{ .Values.namespace }}
   labels:
     app: {{ .Values.albMaster.defaultBackend.name }}
