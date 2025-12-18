@@ -10,3 +10,4 @@
 README.md
 values-pipeline.yaml
 generate-values.sh
+Chart.yaml.template

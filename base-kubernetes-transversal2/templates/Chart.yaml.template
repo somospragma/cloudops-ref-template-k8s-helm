@@ -1,0 +1,17 @@
+apiVersion: v2
+name: eks-controllers
+description: EKS Controllers bundle - AWS Load Balancer Controller & Cluster Autoscaler
+type: application
+version: 1.0.0
+appVersion: "1.0"
+
+dependencies:
+  - name: aws-load-balancer-controller
+    version: ${LB_CONTROLLER_VERSION}
+    repository: https://aws.github.io/eks-charts
+    condition: aws-load-balancer-controller.enabled
+  
+  - name: cluster-autoscaler
+    version: ${CLUSTER_AUTOSCALER_VERSION}
+    repository: https://kubernetes.github.io/autoscaler
+    condition: cluster-autoscaler.enabled

@@ -1,0 +1,77 @@
+{{- if .Values.nodeclass.enabled }}
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: {{ include "eks-controllers.nodeclass.name" . }}
+  {{- with .Values.nodeclass.labels }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.nodeclass.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.nodeclass.role }}
+  role: {{ .Values.nodeclass.role | quote }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.subnetSelectorTerms }}
+  subnetSelectorTerms:
+    {{- range .Values.nodeclass.subnetSelectorTerms }}
+    - {{- if .id }}
+      id: {{ .id | quote }}
+      {{- else if .tags }}
+      tags:
+        {{- toYaml .tags | nindent 8 }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.securityGroupSelectorTerms }}
+  securityGroupSelectorTerms:
+    {{- range .Values.nodeclass.securityGroupSelectorTerms }}
+    - {{- if .id }}
+      id: {{ .id | quote }}
+      {{- else if .tags }}
+      tags:
+        {{- toYaml .tags | nindent 8 }}
+      {{- else if .name }}
+      name: {{ .name | quote }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.ephemeralStorage }}
+  ephemeralStorage:
+    {{- if .Values.nodeclass.ephemeralStorage.size }}
+    size: {{ .Values.nodeclass.ephemeralStorage.size | quote }}
+    {{- end }}
+    {{- if .Values.nodeclass.ephemeralStorage.iops }}
+    iops: {{ .Values.nodeclass.ephemeralStorage.iops }}
+    {{- end }}
+    {{- if .Values.nodeclass.ephemeralStorage.throughput }}
+    throughput: {{ .Values.nodeclass.ephemeralStorage.throughput }}
+    {{- end }}
+    {{- if .Values.nodeclass.ephemeralStorage.kmsKeyID }}
+    kmsKeyID: {{ .Values.nodeclass.ephemeralStorage.kmsKeyID | quote }}
+    {{- end }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.snatPolicy }}
+  snatPolicy: {{ .Values.nodeclass.snatPolicy }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.networkPolicy }}
+  networkPolicy: {{ .Values.nodeclass.networkPolicy }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.networkPolicyEventLogs }}
+  networkPolicyEventLogs: {{ .Values.nodeclass.networkPolicyEventLogs }}
+  {{- end }}
+  
+  {{- if .Values.nodeclass.tags }}
+  tags:
+    {{- toYaml .Values.nodeclass.tags | nindent 4 }}
+  {{- end }}
+{{- end }}

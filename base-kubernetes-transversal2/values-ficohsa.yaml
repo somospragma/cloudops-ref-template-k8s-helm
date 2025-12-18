@@ -1,0 +1,152 @@
+# =====================================================
+# VALORES PARA EKS ADDONS - AMBIENTE: ficohsa
+# =====================================================
+# No editar manualmente - se sobrescribe en cada deployment
+
+global:
+  clusterName: "Place-EKS"
+  awsRegion: "us-east-1"
+  awsAccountId: "161156235207"
+
+# =====================================================
+
+
+# =====================================================
+# KARPENTER - NODECLASS CONFIGURATION
+# =====================================================
+nodeclass:
+  enabled: true
+  nameOverride: "nodeclass-task"
+  role: "Task-AUTOMODE-Rol"
+  
+  subnetSelectorTerms:
+  - id: "subnet-0175291f341bd62b1"
+  - id: "subnet-0a85cde080c4a99a0"
+  - id: "subnet-07fdc6202190e69a5"
+  
+  securityGroupSelectorTerms:
+  - id: "sg-072deefbda727e8ae"
+  
+  ephemeralStorage:
+    size: "80Gi"
+    iops: 3000
+    throughput: 125
+  
+  snatPolicy: "Random"
+  networkPolicy: "DefaultAllow"
+  networkPolicyEventLogs: "Disabled"
+  
+  tags:
+    Environment: "dev"
+    Team: "platform"
+    Name: "KARPENTER"
+
+# =====================================================
+# KARPENTER - NODEPOOL CONFIGURATION
+# =====================================================
+nodepool:
+  enabled: true
+  nameOverride: "nodepool-task"
+  
+  nodeClassRef:
+    name: "nodeclass-task"
+  
+  requirements:
+  - key: "eks.amazonaws.com/instance-category"
+    operator: In
+    values:
+    - "c"
+    - "m"
+    - "r.t"
+  - key: "topology.kubernetes.io/zone"
+    operator: In
+    values:
+    - "us-east-1a"
+    - "us-east-1b"
+  - key: "kubernetes.io/arch"
+    operator: In
+    values:
+    - "amd64"
+    - "arm64"
+  - key: "karpenter.sh/capacity-type"
+    operator: In
+    values:
+    - "on-demand"
+    - "spot"
+  
+  expireAfter: "72h"
+  terminationGracePeriod: "1h"
+  
+  disruption:
+    consolidationPolicy: "WhenEmptyOrUnderutilized"
+    consolidateAfter: "60s"
+  
+  limits:
+    cpu: "1000"
+    memory: "1000Gi"
+  
+  weight: 100
+
+# =====================================================
+# AWS LOAD BALANCER CONTROLLER
+# =====================================================
+aws-load-balancer-controller:
+  enabled: true
+  fullnameOverride: "aws-load-balancer-controller"
+  clusterName: "Place-EKS"
+  region: "us-east-1"
+  vpcId: "vpc-09287afb11a21cd32"
+  logLevel: info
+  
+  serviceAccount:
+    create: true
+    name: aws-load-balancer-controller
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::161156235207:role/Task-AWS-Load-Balancer-Controller-Rol"
+  
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# =====================================================
+# CLUSTER AUTOSCALER
+# =====================================================
+cluster-autoscaler:
+  enabled: true
+  fullnameOverride: "cluster-autoscaler"
+  autoDiscovery:
+    clusterName: "Place-EKS"
+    tags:
+      - "k8s.io/cluster-autoscaler/enabled"
+      - "k8s.io/cluster-autoscaler/Place-EKS"
+  
+  awsRegion: "us-east-1"
+  
+  rbac:
+    serviceAccount:
+      create: true
+      name: cluster-autoscaler
+      annotations:
+        eks.amazonaws.com/role-arn: "arn:aws:iam::161156235207:role/Task-ClusterAutoScaler-Rol"
+  
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  extraArgs:
+    scale-down-enabled: true
+    scale-down-delay-after-add: 1m
+    scale-down-unneeded-time: 1m
+    scale-down-utilization-threshold: 0.5
+    max-node-provision-time: 15m
+    v: 4
