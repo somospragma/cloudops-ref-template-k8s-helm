@@ -115,37 +115,32 @@ ingress:
 
   # Clase del Ingress Controller
   # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con INGRESS_CLASS_NAME
-  # Opciones: "nginx" (más común), "alb" (AWS Application Load Balancer)
-  className: nginx
+  # Solo soporta: "alb" (AWS Application Load Balancer)
+  className: alb
 
   # Annotations para configurar el Ingress
   # ✅ FIJO - Configuración base de annotations
   # Se pueden sobrescribir específicas desde .env.* si es necesario
   annotations:
-    # Nginx Ingress Controller annotations
-    sslRedirect: "false"              # Redirigir HTTP a HTTPS
-    forceSSLRedirect: "false"         # Forzar redirección SSL
-    rewriteTarget: ""                # Reescribir path (vacío = no reescribir)
-
-    # AWS Load Balancer Controller annotations (solo si className=alb)
-    awsScheme: "internet-facing"     # internet-facing o internal
+    # AWS Load Balancer Controller annotations
+    awsScheme: "internal"             # internet-facing o internal
     awsTargetType: "ip"              # ip o instance
+    awsBackendProtocol: "HTTP"       # HTTP o HTTPS
+    awsSuccessCodes: "200"           # Códigos de éxito para health check
+    awsHealthcheckPath: "/"          # Path para health check
+    awsGroupName: ""                 # Nombre del grupo ALB
+    awsListenPorts: ""               # Puertos de escucha JSON
     awsCertificateArn: ""            # ARN del certificado SSL de ACM
 
     # Custom annotations adicionales (se pueden agregar desde .env.*)
     custom: {}
-      # Ejemplo:
-      # nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-      # nginx.ingress.kubernetes.io/rate-limit: "100"
 
-  # Configuración TLS/SSL
-  # ⚠️ OVERRIDE - hosts y secretName se sobrescriben desde .env.*
-  tls:
-    enabled: false                   # Habilitar HTTPS
-    hosts: []                        # Lista de hosts (se sobrescribe con INGRESS_TLS_HOSTS)
-      # - app.example.com
-      # - app.dev.example.com
-    secretName: ""                   # Nombre del Secret con certificado TLS
+  # Configuración de grupo ALB (para AWS Load Balancer Controller)
+  # ⚠️ OVERRIDE - Se habilita/deshabilita desde .env.*
+  group:
+    enabled: false                   # Habilitar agrupación de ALBs
+
+
 
   # Reglas de ruteo
   # ⚠️ OVERRIDE - Se sobrescriben desde .env.* (estructura compleja)
@@ -207,14 +202,9 @@ ingress:
           pathType: Prefix           # Prefix, Exact, ImplementationSpecific
           servicePort: 80            # Puerto del service (normalmente 80)
 
-  # Configuración mTLS (Mutual TLS) - Opcional
-  # ✅ FIJO - Solo habilitar si se requiere autenticación de cliente
-  # ⚠️ OVERRIDE - secretName se sobrescribe desde .env.* si es necesario
-  mtls:
-    enabled: false                   # Habilitar mTLS
-    secretName: ""                   # Nombre del Secret con CA cert para validar clientes
-    verifyClient: "on"               # on, off, optional
-    passCertToUpstream: "false"      # Pasar certificado del cliente al backend
+
+
+
 
 # =====================================================
 # CONFIGMAP (Variables de Aplicación)
@@ -390,11 +380,6 @@ serviceAccount:
     # Permite que el pod asuma un IAM role de AWS sin necesidad de credenciales
     # Ejemplo: arn:aws:iam::123456789012:role/microservicio-app-role
     irsaRoleArn: ""
-
-    # Azure Workload Identity (para clusters AKS)
-    # ⚠️ OVERRIDE - Se sobrescribe desde .env.* con SERVICEACCOUNT_AZURE_CLIENT_ID
-    # Ejemplo: 8e3928e1-03e5-4ba4-9e31-e1e2fe63f720
-    azureClientId: ""
 
     # Custom annotations adicionales
     # ✅ FIJO - Se pueden agregar annotations personalizadas si es necesario

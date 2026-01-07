@@ -10,15 +10,19 @@ metadata:
   annotations:
     # AWS Load Balancer Controller annotations
     {{- if .Values.ingress.group.enabled }}
-    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.annotations.awsGroupName | quote }}
-    alb.ingress.kubernetes.io/listen-ports: {{ .Values.ingress.annotations.awsListenPorts | quote }}
-    {{- end }}
-
     {{- if eq .Values.ingress.className "alb" }}
     alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.annotations.awsTargetType | default "ip" | quote }}
     alb.ingress.kubernetes.io/backend-protocol: {{ .Values.ingress.annotations.awsBackendProtocol | default "HTTP" | quote }}
     alb.ingress.kubernetes.io/success-codes: {{ .Values.ingress.annotations.awsSuccessCodes | default "200" | quote }}
-    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.annotations.awsHealthcheckPath | default "/actuator/health" | quote }}
+    alb.ingress.kubernetes.io/healthcheck-path: {{ .Values.ingress.annotations.awsHealthcheckPath | default "/" | quote }}
+    {{- end }}
+    # AWS ALB Group configuration
+    {{- if .Values.ingress.annotations.awsGroupName }}
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.annotations.awsGroupName | quote }}
+    {{- end }}
+    {{- if .Values.ingress.annotations.awsListenPorts }}
+    alb.ingress.kubernetes.io/listen-ports: {{ .Values.ingress.annotations.awsListenPorts | quote }}
+    {{- end }}
     {{- end }}
 
     # Custom annotations adicionales
